@@ -14,6 +14,7 @@ export type AnalysisStatus =
   | "FAILED";
 
 export type DocumentType = "JOB_DESCRIPTION" | "RESUME";
+export type DocumentFileExtension = "pdf" | "docx" | "xml" | "txt";
 
 export type DocumentStatus =
   | "QUEUED"
@@ -133,6 +134,7 @@ export type Database = {
           user_id: string;
           document_type: DocumentType;
           filename: string;
+          file_extension: DocumentFileExtension;
           object_key: string;
           mime_type: string;
           file_size: number;
@@ -142,8 +144,8 @@ export type Database = {
           page_count: number | null;
           ocr_used: boolean;
           ocr_provider: string | null;
-          extracted_character_count: number | null;
-          error_message: string | null;
+          char_count: number | null;
+          error: string | null;
           processing_attempts: number;
           created_at: string;
           updated_at: string;
@@ -156,6 +158,7 @@ export type Database = {
           user_id: string;
           document_type: DocumentType;
           filename: string;
+          file_extension: DocumentFileExtension;
           object_key: string;
           mime_type?: string;
           file_size: number;
@@ -165,8 +168,8 @@ export type Database = {
           page_count?: number | null;
           ocr_used?: boolean;
           ocr_provider?: string | null;
-          extracted_character_count?: number | null;
-          error_message?: string | null;
+          char_count?: number | null;
+          error?: string | null;
           processing_attempts?: number;
           created_at?: string;
           updated_at?: string;

@@ -10,6 +10,7 @@ export type ExtractionQuality = {
 export function evaluateExtractionQuality(
   extractedText: string,
   pageCount = 1,
+  options: { minimumCharacters?: number } = {},
 ): ExtractionQuality {
   const text = extractedText.trim();
   const characterCount = text.length;
@@ -19,7 +20,8 @@ export function evaluateExtractionQuality(
     (text.match(/[\p{L}\p{N}\p{P}\p{Z}\s]/gu)?.length ?? 0) / characters;
   const replacementRatio = (text.match(/�/g)?.length ?? 0) / characters;
   const reasons: string[] = [];
-  const minimumCharacters = Math.max(120, pageCount * 80);
+  const minimumCharacters =
+    options.minimumCharacters ?? Math.max(120, pageCount * 80);
 
   if (characterCount === 0) reasons.push("No text was extracted.");
   else if (characterCount < minimumCharacters) {

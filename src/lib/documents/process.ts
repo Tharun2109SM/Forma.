@@ -1,12 +1,11 @@
 import "server-only";
 
 import { chunkDocument } from "@/lib/documents/chunk";
-import { extractPdfText } from "@/lib/documents/extraction";
+import { extractDocument } from "@/lib/documents/extraction";
 import { normalizeExtractedPages } from "@/lib/documents/normalize";
-import { evaluateExtractionQuality, shouldUseOCR } from "@/lib/documents/quality";
 import { embedTexts } from "@/lib/openai/embeddings";
-import { extractTextWithOCR } from "@/lib/ocr";
 import { getObjectBytes } from "@/lib/r2/client";
+import { finalizeAnalysisIfReady } from "@/lib/ranking/finalize";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database, DocumentStatus } from "@/types/database";
 
@@ -28,7 +27,7 @@ function candidateName(filename: string, text: string) {
         /^[\p{L}][\p{L}\p{M} .'-]+$/u.test(line) &&
         !/^(resume|curriculum vitae|profile|summary)$/i.test(line),
     );
-  return firstLine ?? filename.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
+  return firstLine ?? filename.replace(/\.[^.]+$/i, "").replace(/[_-]+/g, " ").trim();
 }
 
 async function setStatus(
@@ -50,7 +49,7 @@ async function markFailed(documentId: string, error: unknown) {
     .from("documents")
     .update({
       status: "FAILED",
-      error_message: safeMessage(error),
+      error: safeMessage(error),
       processed_at: new Date().toISOString(),
     })
     .eq("id", documentId);
@@ -80,7 +79,7 @@ async function claimDocument(
     .from("documents")
     .update({
       status: "EXTRACTING",
-      error_message: null,
+      error: null,
       processing_attempts: current.processing_attempts + 1,
       processed_at: null,
     })
@@ -114,61 +113,31 @@ export async function processDocument({
 
   const document = claim.document as DocumentRow;
   try {
-    const pdf = await getObjectBytes(document.object_key);
-    let nativeText = "";
-    let nativePages: string[] = [];
-    let pageCount: number | null = null;
-    let extractionError: unknown;
-
-    try {
-      const extracted = await extractPdfText(pdf);
-      nativeText = extracted.text;
-      nativePages = extracted.pages;
-      pageCount = extracted.pageCount;
-    } catch (error) {
-      extractionError = error;
-    }
-
-    let extractionMethod: "NATIVE" | "OCR" = "NATIVE";
-    let ocrProvider: string | null = null;
-    let sourcePages = nativePages;
-
-    if (shouldUseOCR({ extractedText: nativeText, pageCount, extractionError })) {
-      await setStatus(document.id, "OCR", {
-        page_count: pageCount,
-        error_message: extractionError ? safeMessage(extractionError) : null,
-      });
-      const ocr = await extractTextWithOCR({ pdf, pageCount });
-      extractionMethod = "OCR";
-      ocrProvider = ocr.provider;
-      sourcePages = ocr.pageTexts;
-      pageCount = ocr.pages ?? pageCount ?? sourcePages.length;
-
-      const ocrQuality = evaluateExtractionQuality(ocr.text, pageCount ?? 1);
-      if (!ocrQuality.acceptable) {
-        throw new Error(`OCR text quality failed: ${ocrQuality.reasons.join(" ")}`);
-      }
-    }
+    const bytes = await getObjectBytes(document.object_key);
+    const extracted = await extractDocument({
+      bytes,
+      filename: document.filename,
+      extension: document.file_extension,
+      onOcrRequired: () => setStatus(document.id, "OCR"),
+    });
 
     await setStatus(document.id, "NORMALIZING");
-    const pages = normalizeExtractedPages(sourcePages);
+    const pages = normalizeExtractedPages(extracted.pages);
     const text = pages.join("\n\n").trim();
-    const quality = evaluateExtractionQuality(text, pageCount ?? pages.length);
-    if (!quality.acceptable) {
-      throw new Error(`Extracted text quality failed: ${quality.reasons.join(" ")}`);
-    }
 
-    const chunks = chunkDocument(pages);
+    const chunks = chunkDocument(pages, {
+      pageNumbers: document.file_extension === "pdf",
+    });
     if (chunks.length === 0) throw new Error("No searchable chunks could be created.");
 
     await setStatus(document.id, "INDEXING", {
-      extraction_method: extractionMethod,
+      extraction_method: extracted.extractionMethod,
       extracted_text: text,
-      page_count: pageCount ?? pages.length,
-      ocr_used: extractionMethod === "OCR",
-      ocr_provider: ocrProvider,
-      extracted_character_count: text.length,
-      error_message: null,
+      page_count: extracted.pageCount ?? null,
+      ocr_used: extracted.extractionMethod === "OCR",
+      ocr_provider: extracted.extractionMethod === "OCR" ? "OPENAI" : null,
+      char_count: text.length,
+      error: null,
     });
 
     const embeddings = await embedTexts(chunks.map((chunk) => chunk.content));
@@ -203,6 +172,7 @@ export async function processDocument({
         candidateId: document.candidate_id,
         candidateName: inferredName,
         filename: document.filename,
+        fileExtension: document.file_extension,
         pageNumber: chunk.pageNumber,
         chunkIndex: chunk.chunkIndex,
         sectionLabel: chunk.sectionLabel,
@@ -239,17 +209,22 @@ export async function processDocument({
 
     await setStatus(document.id, "READY", {
       processed_at: new Date().toISOString(),
-      error_message: null,
+      error: null,
     });
+
+    await finalizeAnalysisIfReady(document.analysis_id, document.user_id);
 
     return {
       id: document.id,
       status: "READY" as const,
       chunks: chunks.length,
-      extractionMethod,
+      extractionMethod: extracted.extractionMethod,
     };
   } catch (error) {
     await markFailed(document.id, error);
+    await finalizeAnalysisIfReady(document.analysis_id, document.user_id).catch(
+      () => undefined,
+    );
     throw error;
   }
 }

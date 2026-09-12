@@ -87,7 +87,7 @@ export async function getAnalysis(
     candidates: (candidates ?? []).map((candidate, index) => ({
       id: candidate.id,
       rank: candidate.rank ?? index + 1,
-      name: candidate.name ?? candidate.resume_filename.replace(/\.pdf$/i, ""),
+      name: candidate.name ?? candidate.resume_filename.replace(/\.[^.]+$/i, ""),
       email: candidate.email,
       resumeFilename: candidate.resume_filename,
       semanticScore: candidate.semantic_score ?? 0,

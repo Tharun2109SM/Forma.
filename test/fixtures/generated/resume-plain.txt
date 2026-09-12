@@ -1,0 +1,7 @@
+OMAR KHAN
+SUMMARY
+Backend engineer delivering production platforms.
+SKILLS
+Node.js, PostgreSQL, Docker, AWS
+EXPERIENCE
+Built REST APIs, CI/CD pipelines, and Kubernetes deployments.

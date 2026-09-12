@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resume>
+  <name>Leena Thomas</name>
+  <summary>Platform engineer with production API ownership.</summary>
+  <skills><skill>Node.js</skill><skill>PostgreSQL</skill><skill>Docker</skill></skills>
+  <experience>Deployed reliable REST services on AWS and Kubernetes.</experience>
+</resume>

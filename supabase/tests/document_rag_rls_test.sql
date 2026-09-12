@@ -1,9 +1,19 @@
 begin;
 
-select plan(24);
+select plan(25);
 
 select ok(to_regclass('public.documents') is not null, 'documents table exists');
 select ok(to_regclass('public.document_chunks') is not null, 'document_chunks table exists');
+select ok(
+  exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'documents'
+      and column_name = 'file_extension'
+      and is_nullable = 'NO'
+  ),
+  'documents store a required format-neutral file extension'
+);
 select ok(
   exists (select 1 from pg_extension where extname = 'vector'),
   'pgvector extension is enabled'
@@ -91,7 +101,7 @@ values
 
 insert into public.documents (
   id, analysis_id, candidate_id, user_id, document_type,
-  filename, object_key, file_size, status
+  filename, file_extension, object_key, file_size, status
 )
 values
   (
@@ -99,7 +109,7 @@ values
     '31000000-0000-0000-0000-000000000001',
     '31100000-0000-0000-0000-000000000001',
     '30000000-0000-0000-0000-000000000003',
-    'RESUME', 'one-a.pdf',
+    'RESUME', 'one-a.pdf', 'pdf',
     'users/30000000-0000-0000-0000-000000000003/analyses/31000000-0000-0000-0000-000000000001/resumes/31100000-0000-0000-0000-000000000001.pdf',
     1000, 'READY'
   ),
@@ -108,7 +118,7 @@ values
     '32000000-0000-0000-0000-000000000002',
     '32100000-0000-0000-0000-000000000002',
     '30000000-0000-0000-0000-000000000003',
-    'RESUME', 'one-b.pdf',
+    'RESUME', 'one-b.pdf', 'pdf',
     'users/30000000-0000-0000-0000-000000000003/analyses/32000000-0000-0000-0000-000000000002/resumes/32100000-0000-0000-0000-000000000002.pdf',
     1000, 'READY'
   ),
@@ -117,7 +127,7 @@ values
     '41000000-0000-0000-0000-000000000001',
     '41100000-0000-0000-0000-000000000001',
     '40000000-0000-0000-0000-000000000004',
-    'RESUME', 'two-a.pdf',
+    'RESUME', 'two-a.pdf', 'pdf',
     'users/40000000-0000-0000-0000-000000000004/analyses/41000000-0000-0000-0000-000000000001/resumes/41100000-0000-0000-0000-000000000001.pdf',
     1000, 'READY'
   );
@@ -208,13 +218,13 @@ select throws_ok(
   $$
     insert into public.documents (
       id, analysis_id, candidate_id, user_id, document_type,
-      filename, object_key, file_size
+      filename, file_extension, object_key, file_size
     ) values (
       '39900000-0000-0000-0000-000000000009',
       '31000000-0000-0000-0000-000000000001',
       '31100000-0000-0000-0000-000000000001',
       '30000000-0000-0000-0000-000000000003',
-      'RESUME', 'invalid.pdf', 'users/another/path.pdf', 1000
+      'RESUME', 'invalid.pdf', 'pdf', 'users/another/path.pdf', 1000
     )
   $$,
   '23514',

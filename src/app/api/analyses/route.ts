@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import {
+  canonicalMimeType,
+  fileExtension,
+  isSupportedDocument,
+  MAX_DOCUMENT_SIZE,
+  supportedFormatLabel,
+} from "@/lib/documents/formats";
+import {
   getMaxResumesPerAnalysis,
   hasOpenAIEnv,
   hasR2Env,
@@ -14,21 +21,20 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const MAX_PDF_SIZE = 15 * 1024 * 1024;
-const pdfSchema = z.object({
-  name: z.string().trim().min(5).max(255).refine(
-    (name) => name.toLowerCase().endsWith(".pdf"),
-    "Only PDF files are accepted.",
-  ),
-  size: z.number().int().positive().max(MAX_PDF_SIZE),
-});
+const documentSchema = z
+  .object({
+    name: z.string().trim().min(5).max(255),
+    size: z.number().int().positive().max(MAX_DOCUMENT_SIZE),
+    type: z.string().trim().max(200).optional(),
+  })
+  .refine(isSupportedDocument, `Only ${supportedFormatLabel()} files are accepted.`);
 
 const requestSchema = z.object({
   title: z.string().trim().min(2).max(90),
   jobTitle: z.string().trim().max(90).optional(),
   companyName: z.string().trim().max(90).optional(),
-  jobDescription: pdfSchema,
-  resumes: z.array(pdfSchema).min(1).max(250),
+  jobDescription: documentSchema,
+  resumes: z.array(documentSchema).min(1).max(250),
 });
 
 export async function POST(request: Request) {
@@ -45,7 +51,7 @@ export async function POST(request: Request) {
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Check the selected PDF files." },
+          { error: parsed.error.issues[0]?.message ?? "Check the selected documents." },
         { status: 400 },
       );
     }
@@ -74,19 +80,21 @@ export async function POST(request: Request) {
     const user = authData.user;
     const supabase = createAdminClient();
     const analysisId = crypto.randomUUID();
+    const jdExtension = fileExtension(parsed.data.jobDescription.name)!;
     const candidates = parsed.data.resumes.map((file) => {
       const id = crypto.randomUUID();
+      const extension = fileExtension(file.name)!;
       return {
         id,
         analysis_id: analysisId,
         resume_filename: file.name,
-        resume_object_key: resumeKey(user.id, analysisId, id),
+        resume_object_key: resumeKey(user.id, analysisId, id, extension),
         matched_skills: [],
         missing_skills: [],
       };
     });
     const jdDocumentId = crypto.randomUUID();
-    const jdKey = jobDescriptionKey(user.id, analysisId, jdDocumentId);
+    const jdKey = jobDescriptionKey(user.id, analysisId, jdDocumentId, jdExtension);
     const documents = [
       {
         id: jdDocumentId,
@@ -95,21 +103,29 @@ export async function POST(request: Request) {
         user_id: user.id,
         document_type: "JOB_DESCRIPTION" as const,
         filename: parsed.data.jobDescription.name,
+        file_extension: jdExtension,
         object_key: jdKey,
+        mime_type: canonicalMimeType(jdExtension),
         file_size: parsed.data.jobDescription.size,
         status: "UPLOADING" as const,
       },
-      ...candidates.map((candidate, index) => ({
-        id: candidate.id,
-        analysis_id: analysisId,
-        candidate_id: candidate.id,
-        user_id: user.id,
-        document_type: "RESUME" as const,
-        filename: parsed.data.resumes[index]!.name,
-        object_key: candidate.resume_object_key,
-        file_size: parsed.data.resumes[index]!.size,
-        status: "UPLOADING" as const,
-      })),
+      ...candidates.map((candidate, index) => {
+        const file = parsed.data.resumes[index]!;
+        const extension = fileExtension(file.name)!;
+        return {
+          id: candidate.id,
+          analysis_id: analysisId,
+          candidate_id: candidate.id,
+          user_id: user.id,
+          document_type: "RESUME" as const,
+          filename: file.name,
+          file_extension: extension,
+          object_key: candidate.resume_object_key,
+          mime_type: canonicalMimeType(extension),
+          file_size: file.size,
+          status: "UPLOADING" as const,
+        };
+      }),
     ];
 
     const { error: analysisError } = await supabase.from("analyses").insert({
@@ -145,6 +161,7 @@ export async function POST(request: Request) {
           key: jdKey,
           documentId: jdDocumentId,
           filename: parsed.data.jobDescription.name,
+          contentType: canonicalMimeType(jdExtension),
         },
         ...candidates.map((candidate, index) => ({
           field: "resume" as const,
@@ -152,11 +169,14 @@ export async function POST(request: Request) {
           key: candidate.resume_object_key,
           documentId: candidate.id,
           filename: parsed.data.resumes[index]!.name,
+          contentType: canonicalMimeType(
+            fileExtension(parsed.data.resumes[index]!.name)!,
+          ),
         })),
       ];
       const uploads = await mapWithConcurrency(definitions, 8, async (upload) => ({
           ...upload,
-          url: await getSignedUploadUrl(upload.key),
+          url: await getSignedUploadUrl(upload.key, upload.contentType),
         }));
 
       return NextResponse.json({ id: analysisId, preview: false, uploads }, { status: 201 });

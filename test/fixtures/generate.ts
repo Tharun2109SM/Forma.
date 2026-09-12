@@ -1,5 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+} from "docx";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import sharp from "sharp";
 
@@ -72,7 +80,57 @@ async function main() {
     await writeFile(path.join(fixtureDirectory, fixture.filename), await textPdf(fixture));
   }
   await writeFile(path.join(fixtureDirectory, "resume-scanned-image.pdf"), await scannedPdf());
-  console.log(`Generated ${fixtures.length + 1} synthetic PDF fixtures in ${fixtureDirectory}`);
+  const docx = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph("PRIYA MENON"),
+          new Paragraph("SUMMARY"),
+          new Paragraph("Backend engineer building reliable production services."),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph("SKILLS")] }),
+                  new TableCell({
+                    children: [new Paragraph("Node.js, PostgreSQL, Docker, AWS")],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph("Built REST APIs and Kubernetes deployment pipelines."),
+        ],
+      },
+    ],
+  });
+  await writeFile(
+    path.join(fixtureDirectory, "resume-table.docx"),
+    await Packer.toBuffer(docx),
+  );
+  await writeFile(
+    path.join(fixtureDirectory, "resume-structured.xml"),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<resume>
+  <name>Leena Thomas</name>
+  <summary>Platform engineer with production API ownership.</summary>
+  <skills><skill>Node.js</skill><skill>PostgreSQL</skill><skill>Docker</skill></skills>
+  <experience>Deployed reliable REST services on AWS and Kubernetes.</experience>
+</resume>`,
+  );
+  await writeFile(
+    path.join(fixtureDirectory, "resume-plain.txt"),
+    `OMAR KHAN
+SUMMARY
+Backend engineer delivering production platforms.
+SKILLS
+Node.js, PostgreSQL, Docker, AWS
+EXPERIENCE
+Built REST APIs, CI/CD pipelines, and Kubernetes deployments.`,
+  );
+  console.log(
+    `Generated ${fixtures.length + 4} synthetic PDF, DOCX, XML, and TXT fixtures in ${fixtureDirectory}`,
+  );
 }
 
 void main();

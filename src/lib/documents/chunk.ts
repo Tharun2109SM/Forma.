@@ -4,7 +4,7 @@ const HEADING_PATTERN = /^(skills?|experience|work experience|employment|project
 
 export type DocumentChunk = {
   chunkIndex: number;
-  pageNumber: number;
+  pageNumber: number | null;
   sectionLabel: string | null;
   content: string;
   tokenCount: number;
@@ -37,7 +37,10 @@ function splitLongText(text: string) {
   return chunks;
 }
 
-export function chunkDocument(pages: string[]): DocumentChunk[] {
+export function chunkDocument(
+  pages: string[],
+  options: { pageNumbers?: boolean } = {},
+): DocumentChunk[] {
   const output: DocumentChunk[] = [];
   let sectionLabel: string | null = null;
 
@@ -66,7 +69,7 @@ export function chunkDocument(pages: string[]): DocumentChunk[] {
       for (const content of splitLongText(segment.content)) {
         output.push({
           chunkIndex: output.length,
-          pageNumber: pageIndex + 1,
+          pageNumber: options.pageNumbers === false ? null : pageIndex + 1,
           sectionLabel: segment.sectionLabel,
           content,
           tokenCount: approximateTokenCount(content),

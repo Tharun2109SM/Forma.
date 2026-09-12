@@ -33,13 +33,7 @@ export function hasOpenAIEnv() {
 }
 
 export function hasOcrEnv() {
-  return (
-    (process.env.OCR_PROVIDER ?? "google-vision") === "google-vision" &&
-    Boolean(
-      process.env.GOOGLE_CLOUD_PROJECT_ID &&
-        process.env.GOOGLE_CLOUD_VISION_CREDENTIALS,
-    )
-  );
+  return (process.env.OCR_PROVIDER ?? "openai") === "openai" && hasOpenAIEnv();
 }
 
 export function getMaxResumesPerAnalysis() {

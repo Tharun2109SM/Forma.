@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   FileDropzone,
-  type QueuedPdf,
-  type QueuedPdfStatus,
+  type QueuedDocument,
+  type QueuedDocumentStatus,
 } from "@/components/analysis/file-dropzone";
 import { mapWithConcurrency } from "@/lib/concurrency";
 
@@ -20,13 +20,28 @@ const MAX_RESUMES = Math.min(
   Math.max(1, Number(process.env.NEXT_PUBLIC_MAX_RESUMES_PER_ANALYSIS ?? 100) || 100),
 );
 
-async function putWithRetry(url: string, file: File) {
+type PreparedUpload = {
+  field: "jobDescription" | "resume";
+  index: number;
+  url: string;
+  documentId: string;
+  filename: string;
+  contentType: string;
+};
+
+type PreparedAnalysis = {
+  id: string;
+  preview: boolean;
+  uploads: PreparedUpload[];
+};
+
+async function putWithRetry(url: string, file: File, contentType: string) {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await fetch(url, {
         method: "PUT",
-        headers: { "Content-Type": "application/pdf" },
+        headers: { "Content-Type": contentType },
         body: file,
       });
       if (response.ok) return;
@@ -46,10 +61,103 @@ async function putWithRetry(url: string, file: File) {
 
 export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
   const router = useRouter();
-  const [jobDescription, setJobDescription] = useState<QueuedPdf[]>([]);
-  const [resumes, setResumes] = useState<QueuedPdf[]>([]);
+  const [jobDescription, setJobDescription] = useState<QueuedDocument[]>([]);
+  const [resumes, setResumes] = useState<QueuedDocument[]>([]);
+  const [prepared, setPrepared] = useState<PreparedAnalysis | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function updateFile(
+    field: "jobDescription" | "resume",
+    index: number,
+    status: QueuedDocumentStatus,
+    values: Partial<QueuedDocument> = {},
+  ) {
+    const setter = field === "jobDescription" ? setJobDescription : setResumes;
+    setter((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...values, status } : item,
+      ),
+    );
+  }
+
+  function queuedFile(upload: PreparedUpload) {
+    return upload.field === "jobDescription"
+      ? jobDescription[0]
+      : resumes[upload.index];
+  }
+
+  async function uploadOne(
+    analysis: PreparedAnalysis,
+    upload: PreparedUpload,
+    refreshUrl: boolean,
+  ) {
+    const queued = queuedFile(upload);
+    if (!queued) return false;
+    updateFile(upload.field, upload.index, "UPLOADING", {
+      documentId: upload.documentId,
+      error: undefined,
+    });
+    try {
+      let target = upload;
+      if (refreshUrl) {
+        const prepareResponse = await fetch(
+          `/api/analyses/${analysis.id}/documents/${upload.documentId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "prepare-upload" }),
+          },
+        );
+        const preparedUpload = (await prepareResponse.json()) as Partial<PreparedUpload> & {
+          error?: string;
+        };
+        if (!prepareResponse.ok || !preparedUpload.url || !preparedUpload.contentType) {
+          throw new Error(preparedUpload.error ?? "Upload retry could not be prepared.");
+        }
+        target = { ...upload, ...preparedUpload };
+      }
+
+      await putWithRetry(target.url, queued.file, target.contentType);
+      const statusResponse = await fetch(
+        `/api/analyses/${analysis.id}/documents/${upload.documentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "uploaded" }),
+        },
+      );
+      if (!statusResponse.ok) throw new Error("Upload could not be verified.");
+      updateFile(upload.field, upload.index, "UPLOADED");
+      return true;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Upload failed.";
+      updateFile(upload.field, upload.index, "FAILED", { error: message });
+      await fetch(`/api/analyses/${analysis.id}/documents/${upload.documentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "failed", error: message }),
+      }).catch(() => undefined);
+      return false;
+    }
+  }
+
+  async function retryFile(file: QueuedDocument) {
+    if (!prepared || !file.documentId || submitting) return;
+    const upload = prepared.uploads.find(
+      (item) => item.documentId === file.documentId,
+    );
+    if (!upload) return;
+    setSubmitting(true);
+    setError(null);
+    const succeeded = await uploadOne(prepared, upload, true);
+    setError(
+      succeeded
+        ? `${file.file.name} uploaded. Run the analysis when every file is ready.`
+        : `Could not upload ${file.file.name}.`,
+    );
+    setSubmitting(false);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,97 +168,65 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
 
     setSubmitting(true);
     setError(null);
-    function updateFile(
-      field: "jobDescription" | "resume",
-      index: number,
-      status: QueuedPdfStatus,
-      values: Partial<QueuedPdf> = {},
-    ) {
-      const setter = field === "jobDescription" ? setJobDescription : setResumes;
-      setter((current) =>
-        current.map((item, itemIndex) =>
-          itemIndex === index ? { ...item, ...values, status } : item,
-        ),
-      );
-    }
-
     try {
-      const response = await fetch("/api/analyses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: fields.get("title"),
-          jobTitle: fields.get("jobTitle") || undefined,
-          companyName: fields.get("companyName") || undefined,
-          jobDescription: {
-            name: jobDescription[0].file.name,
-            size: jobDescription[0].file.size,
-          },
-          resumes: resumes.map(({ file }) => ({ name: file.name, size: file.size })),
-        }),
-      });
-      const payload = (await response.json()) as {
-        id?: string;
-        preview?: boolean;
-        uploads?: Array<{
-          field: "jobDescription" | "resume";
-          index: number;
-          url: string;
-          documentId: string;
-          filename: string;
-        }>;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.id) {
-        throw new Error(payload.error ?? "The analysis could not be created.");
-      }
-      if (!payload.preview) {
-        const uploads = payload.uploads ?? [];
-        const uploadResults = await mapWithConcurrency(
-          uploads,
-          UPLOAD_CONCURRENCY,
-          async (upload) => {
-            const queued =
-              upload.field === "jobDescription"
-                ? jobDescription[0]
-                : resumes[upload.index];
-            if (!queued) return false;
-            updateFile(upload.field, upload.index, "UPLOADING", {
-              documentId: upload.documentId,
-              error: undefined,
-            });
-            try {
-              await putWithRetry(upload.url, queued.file);
-              const statusResponse = await fetch(
-                `/api/analyses/${payload.id}/documents/${upload.documentId}`,
-                {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ action: "uploaded" }),
-                },
-              );
-              if (!statusResponse.ok) throw new Error("Upload could not be verified.");
-              updateFile(upload.field, upload.index, "UPLOADED");
-              return true;
-            } catch (cause) {
-              const message = cause instanceof Error ? cause.message : "Upload failed.";
-              updateFile(upload.field, upload.index, "FAILED", { error: message });
-              await fetch(`/api/analyses/${payload.id}/documents/${upload.documentId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "failed", error: message }),
-              }).catch(() => undefined);
-              return false;
-            }
-          },
-        );
-
-        const finalizeResponse = await fetch(`/api/analyses/${payload.id}/complete`, {
+      let analysis = prepared;
+      const retryingPreparedAnalysis = Boolean(analysis);
+      if (!analysis) {
+        const response = await fetch("/api/analyses", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            successfulUploads: uploadResults.filter(Boolean).length,
+            title: fields.get("title"),
+            jobTitle: fields.get("jobTitle") || undefined,
+            companyName: fields.get("companyName") || undefined,
+            jobDescription: {
+              name: jobDescription[0].file.name,
+              size: jobDescription[0].file.size,
+              type: jobDescription[0].file.type,
+            },
+            resumes: resumes.map(({ file }) => ({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+            })),
+          }),
+        });
+        const payload = (await response.json()) as Partial<PreparedAnalysis> & {
+          error?: string;
+        };
+        if (!response.ok || !payload.id) {
+          throw new Error(payload.error ?? "The analysis could not be created.");
+        }
+        analysis = {
+          id: payload.id,
+          preview: payload.preview ?? false,
+          uploads: payload.uploads ?? [],
+        };
+        setPrepared(analysis);
+      }
+
+      if (!analysis.preview) {
+        const uploads = analysis.uploads.filter((upload) => {
+          const queued = queuedFile(upload);
+          return queued && queued.status !== "UPLOADED" && queued.status !== "READY";
+        });
+        const uploadResults = await mapWithConcurrency(
+          uploads,
+          UPLOAD_CONCURRENCY,
+          (upload) => uploadOne(analysis!, upload, retryingPreparedAnalysis),
+        );
+
+        if (uploadResults.some((result) => !result)) {
+          setError("Some documents failed to upload. Retry each failed file before continuing.");
+          setSubmitting(false);
+          return;
+        }
+
+        const finalizeResponse = await fetch(`/api/analyses/${analysis.id}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            successfulUploads: jobDescription.length + resumes.length,
           }),
         });
         if (!finalizeResponse.ok) {
@@ -159,7 +235,7 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
       }
 
       router.push(
-        `/analysis/${payload.id}?state=processing${payload.preview ? "&preview=1" : ""}`,
+        `/analysis/${analysis.id}?state=processing${analysis.preview ? "&preview=1" : ""}`,
       );
     } catch (cause) {
       setError(
@@ -234,11 +310,13 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
         id="job-description"
         label="Job description"
         multiple={false}
+        onRetry={(file) => void retryFile(file)}
         onChange={setJobDescription}
+        selectionLocked={Boolean(prepared)}
       />
 
       <FileDropzone
-        description="Add all candidate resumes. Every valid PDF will appear in the final ranking."
+        description="Add all candidate resumes. Every valid document will appear in the final ranking."
         disabled={submitting}
         files={resumes}
         id="candidate-resumes"
@@ -246,6 +324,8 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
         multiple
         maxFiles={MAX_RESUMES}
         onChange={setResumes}
+        onRetry={(file) => void retryFile(file)}
+        selectionLocked={Boolean(prepared)}
       />
 
       <footer className="analysis-submit-bar">
@@ -254,7 +334,7 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
           <p>
             {demoMode
               ? "Preview mode validates your selection but does not persist files."
-              : "PDFs are private to your account. Raw files are stored in R2, never in Postgres."}
+              : "Documents are private to your account. Raw files are stored in R2, never in Postgres."}
           </p>
         </div>
         <div className="submit-actions">

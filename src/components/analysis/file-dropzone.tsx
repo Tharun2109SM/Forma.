@@ -1,11 +1,15 @@
 "use client";
 
-import { FileText, Plus, Trash2, UploadCloud } from "lucide-react";
+import { FileText, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
+import {
+  DOCUMENT_ACCEPT,
+  isSupportedDocument,
+  MAX_DOCUMENT_SIZE,
+  supportedFormatLabel,
+} from "@/lib/documents/formats";
 
-const MAX_PDF_SIZE = 15 * 1024 * 1024;
-
-export type QueuedPdfStatus =
+export type QueuedDocumentStatus =
   | "QUEUED"
   | "UPLOADING"
   | "UPLOADED"
@@ -13,10 +17,10 @@ export type QueuedPdfStatus =
   | "READY"
   | "FAILED";
 
-export type QueuedPdf = {
+export type QueuedDocument = {
   id: string;
   file: File;
-  status: QueuedPdfStatus;
+  status: QueuedDocumentStatus;
   error?: string;
   documentId?: string;
 };
@@ -24,10 +28,6 @@ export type QueuedPdf = {
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function isPdfablePdf(file: File) {
-  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
 export function FileDropzone({
@@ -38,32 +38,37 @@ export function FileDropzone({
   multiple,
   maxFiles = 100,
   disabled = false,
+  selectionLocked = false,
   onChange,
+  onRetry,
 }: {
   description: string;
-  files: QueuedPdf[];
+  files: QueuedDocument[];
   id: string;
   label: string;
   multiple: boolean;
   maxFiles?: number;
   disabled?: boolean;
-  onChange: (files: QueuedPdf[]) => void;
+  selectionLocked?: boolean;
+  onChange: (files: QueuedDocument[]) => void;
+  onRetry?: (file: QueuedDocument) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function addFiles(incoming: FileList | File[]) {
+    if (disabled || selectionLocked) return;
     const candidates = Array.from(incoming);
-    const invalid = candidates.filter((file) => !isPdfablePdf(file));
+    const invalid = candidates.filter((file) => !isSupportedDocument(file));
     const tooLarge = candidates.filter(
-      (file) => isPdfablePdf(file) && file.size > MAX_PDF_SIZE,
+      (file) => isSupportedDocument(file) && file.size > MAX_DOCUMENT_SIZE,
     );
     const valid = candidates.filter(
-      (file) => isPdfablePdf(file) && file.size <= MAX_PDF_SIZE,
+      (file) => isSupportedDocument(file) && file.size <= MAX_DOCUMENT_SIZE,
     );
     const messages = [
-      ...invalid.map((file) => `${file.name} is not a PDF.`),
+      ...invalid.map((file) => `${file.name} is not a supported document.`),
       ...tooLarge.map((file) => `${file.name} is larger than 15 MB.`),
     ];
     setError(messages.length ? messages.join(" ") : null);
@@ -114,11 +119,11 @@ export function FileDropzone({
         }}
       >
         <input
-          accept="application/pdf,.pdf"
+          accept={DOCUMENT_ACCEPT}
           aria-describedby={`${id}-hint`}
           className="visually-hidden"
           id={id}
-          disabled={disabled}
+          disabled={disabled || selectionLocked}
           multiple={multiple}
           onChange={(event) => {
             if (event.target.files) addFiles(event.target.files);
@@ -127,11 +132,15 @@ export function FileDropzone({
           ref={inputRef}
           type="file"
         />
-        <button disabled={disabled} onClick={() => inputRef.current?.click()} type="button">
+        <button
+          disabled={disabled || selectionLocked}
+          onClick={() => inputRef.current?.click()}
+          type="button"
+        >
           <UploadCloud aria-hidden="true" size={22} strokeWidth={1.5} />
-          <strong>{dragging ? "Drop PDFs here" : "Drop PDFs here or browse"}</strong>
+          <strong>{dragging ? "Drop documents here" : "Drop documents here or browse"}</strong>
           <span id={`${id}-hint`}>
-            PDF only · Up to 15 MB {multiple ? "each" : ""}
+            {supportedFormatLabel()} · Up to 15 MB {multiple ? "each" : ""}
           </span>
         </button>
       </div>
@@ -158,19 +167,36 @@ export function FileDropzone({
               <span className={`file-type file-status-${queued.status.toLowerCase()}`}>
                 {queued.status}
               </span>
-              <button
-                aria-label={`Remove ${queued.file.name}`}
-                disabled={disabled || queued.status === "UPLOADING"}
-                onClick={() => onChange(files.filter((item) => item.id !== queued.id))}
-                type="button"
-              >
-                <Trash2 size={15} strokeWidth={1.7} />
-              </button>
+              {queued.status === "FAILED" && onRetry ? (
+                <button
+                  aria-label={`Retry ${queued.file.name}`}
+                  disabled={disabled}
+                  onClick={() => onRetry(queued)}
+                  type="button"
+                >
+                  <RotateCcw size={15} strokeWidth={1.7} />
+                </button>
+              ) : (
+                <button
+                  aria-label={`Remove ${queued.file.name}`}
+                  disabled={
+                    disabled || selectionLocked || queued.status === "UPLOADING"
+                  }
+                  onClick={() => onChange(files.filter((item) => item.id !== queued.id))}
+                  type="button"
+                >
+                  <Trash2 size={15} strokeWidth={1.7} />
+                </button>
+              )}
             </li>
           ))}
           {multiple && (
             <li className="add-more-row">
-              <button disabled={disabled} onClick={() => inputRef.current?.click()} type="button">
+              <button
+                disabled={disabled || selectionLocked}
+                onClick={() => inputRef.current?.click()}
+                type="button"
+              >
                 <Plus size={15} /> Add more resumes
               </button>
             </li>

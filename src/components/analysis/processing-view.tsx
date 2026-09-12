@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Check, LoaderCircle, RotateCcw, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { AnalysisWorkspaceData } from "@/lib/data/analysis";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import type { DocumentStatus, DocumentType } from "@/types/database";
@@ -24,11 +25,12 @@ type ProcessingDocument = {
   status: DocumentStatus;
   extraction_method: "NATIVE" | "OCR" | null;
   ocr_used: boolean;
-  error_message: string | null;
+  error: string | null;
   updated_at: string;
 };
 
 type StatusResponse = {
+  analysis: { status: "UPLOADING" | "PROCESSING" | "COMPLETED" | "FAILED" };
   documents: ProcessingDocument[];
   chunkCount: number;
   ready: boolean;
@@ -82,7 +84,7 @@ function RecruiterAsk({ analysisId }: { analysisId: string }) {
         <span>EVIDENCE-GROUNDED</span>
       </div>
       <div className="rag-panel-body">
-        <h2 id="rag-title">Ask across every uploaded PDF</h2>
+        <h2 id="rag-title">Ask across every uploaded document</h2>
         <p>Forma. will answer only from this analysis and return the supporting sources.</p>
         <form onSubmit={ask}>
           <input
@@ -131,6 +133,7 @@ export function ProcessingView({
   activeStage: number;
   analysis: AnalysisWorkspaceData;
 }) {
+  const router = useRouter();
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const processingRef = useRef(false);
@@ -145,6 +148,10 @@ export function ProcessingView({
       if (!response.ok) throw new Error(payload.error ?? "Status unavailable.");
       setStatus(payload);
       setStatusError(null);
+      if (["COMPLETED", "FAILED"].includes(payload.analysis.status)) {
+        router.refresh();
+        return;
+      }
 
       const staleBefore = Date.now() - 5 * 60 * 1_000;
       const stale = payload.documents.filter(
@@ -173,7 +180,7 @@ export function ProcessingView({
       processingRef.current = false;
       setStatusError(cause instanceof Error ? cause.message : "Processing status unavailable.");
     }
-  }, [analysis.id, analysis.isSample]);
+  }, [analysis.id, analysis.isSample, router]);
 
   useEffect(() => {
     if (analysis.isSample) return;
@@ -268,7 +275,7 @@ export function ProcessingView({
               {[
                 ["UP", "Uploading documents", realCounts ? `${realCounts.uploaded} / ${status?.documents.length}` : "WAIT"],
                 ["EXT", "Extracting text", realCounts ? `${realCounts.extracting} / ${status?.documents.length}` : "WAIT"],
-                ["OCR", "OCR fallback", realCounts ? `${realCounts.ocr} PDFs` : "WAIT"],
+                ["OCR", "OCR fallback", realCounts ? `${realCounts.ocr} scanned PDFs` : "WAIT"],
                 ["IDX", "Indexing knowledge base", status ? `${status.chunkCount} chunks` : "WAIT"],
                 ["READY", "Searchable documents", realCounts ? `${realCounts.ready} / ${status?.documents.length}` : "WAIT"],
               ].map(([code, label, value]) => (
@@ -286,7 +293,7 @@ export function ProcessingView({
               <span>FAILED DOCUMENTS</span>
               {realCounts.failed.map((document) => (
                 <div key={document.id}>
-                  <p><strong>{document.filename}</strong><small>{document.error_message}</small></p>
+                  <p><strong>{document.filename}</strong><small>{document.error}</small></p>
                   <button onClick={() => void retry(document)} type="button">
                     <RotateCcw size={13} /> Retry
                   </button>

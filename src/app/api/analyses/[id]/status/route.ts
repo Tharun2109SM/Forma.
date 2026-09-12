@@ -35,7 +35,7 @@ export async function GET(
       supabase
         .from("documents")
         .select(
-          "id,document_type,filename,status,extraction_method,page_count,ocr_used,error_message,updated_at,processed_at",
+          "id,document_type,filename,file_extension,status,extraction_method,page_count,ocr_used,error,updated_at,processed_at",
         )
         .eq("analysis_id", id.data)
         .order("created_at"),

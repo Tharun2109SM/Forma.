@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { processDocument } from "@/lib/documents/process";
-import { objectExists } from "@/lib/r2/client";
+import { getSignedUploadUrl, objectExists } from "@/lib/r2/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,6 +16,7 @@ const patchSchema = z.discriminatedUnion("action", [
     error: z.string().trim().min(1).max(1_500),
   }),
   z.object({ action: z.literal("retry") }),
+  z.object({ action: z.literal("prepare-upload") }),
 ]);
 
 async function context(rawParams: Promise<{ id: string; documentId: string }>) {
@@ -57,7 +58,7 @@ export async function PATCH(
   }
 
   let status: "UPLOADED" | "FAILED";
-  let errorMessage: string | null = null;
+  let documentError: string | null = null;
   if (body.data.action === "uploaded") {
     if (resolved.document.status !== "UPLOADING") {
       return NextResponse.json({ error: "Document is not awaiting upload." }, { status: 409 });
@@ -68,7 +69,31 @@ export async function PATCH(
     status = "UPLOADED";
   } else if (body.data.action === "failed") {
     status = "FAILED";
-    errorMessage = body.data.error;
+    documentError = body.data.error;
+  } else if (body.data.action === "prepare-upload") {
+    if (!["FAILED", "UPLOADING"].includes(resolved.document.status)) {
+      return NextResponse.json(
+        { error: "Document is not awaiting an upload retry." },
+        { status: 409 },
+      );
+    }
+    const { error } = await resolved.admin
+      .from("documents")
+      .update({ status: "UPLOADING", error: null, processed_at: null })
+      .eq("id", resolved.document.id)
+      .eq("user_id", resolved.user.id);
+    if (error) {
+      return NextResponse.json({ error: "Upload retry could not be prepared." }, { status: 500 });
+    }
+    return NextResponse.json({
+      documentId: resolved.document.id,
+      filename: resolved.document.filename,
+      contentType: resolved.document.mime_type,
+      url: await getSignedUploadUrl(
+        resolved.document.object_key,
+        resolved.document.mime_type,
+      ),
+    });
   } else {
     const updatedAt = new Date(resolved.document.updated_at).getTime();
     const stale = Date.now() - updatedAt > 5 * 60 * 1_000;
@@ -76,17 +101,17 @@ export async function PATCH(
       return NextResponse.json({ error: "Document is already processing." }, { status: 409 });
     }
     if (!(await objectExists(resolved.document.object_key))) {
-      return NextResponse.json({ error: "The PDF is missing from R2." }, { status: 409 });
+      return NextResponse.json({ error: "The document is missing from R2." }, { status: 409 });
     }
     status = "UPLOADED";
   }
 
   const { data, error } = await resolved.admin
     .from("documents")
-    .update({ status, error_message: errorMessage, processed_at: null })
+    .update({ status, error: documentError, processed_at: null })
     .eq("id", resolved.document.id)
     .eq("user_id", resolved.user.id)
-    .select("id,status,error_message")
+    .select("id,status,error")
     .single();
   if (error) {
     return NextResponse.json({ error: "Document status could not be updated." }, { status: 500 });

@@ -2,6 +2,7 @@ export * from "@/lib/ranking/cosine";
 export * from "@/lib/ranking/keywords";
 export * from "@/lib/ranking/normalize";
 export * from "@/lib/ranking/rank";
+export * from "@/lib/ranking/requirements";
 export * from "@/lib/ranking/score";
 export * from "@/lib/ranking/semantic";
 export * from "@/lib/ranking/skills";

@@ -20,6 +20,13 @@ export function AnalysisWorkspace({
 }) {
   const [mode, setMode] = useState<WorkspaceMode>(initialMode);
   const [activeStage, setActiveStage] = useState(0);
+  const effectiveMode = analysis.isSample
+    ? mode
+    : analysis.status === "COMPLETED"
+      ? "completed"
+      : analysis.status === "FAILED"
+        ? "failed"
+        : mode;
 
   useEffect(() => {
     if (mode !== "processing" || !resolvePreview) return;
@@ -40,11 +47,11 @@ export function AnalysisWorkspace({
     return () => window.clearInterval(interval);
   }, [mode, resolvePreview]);
 
-  if (mode === "completed") {
+  if (effectiveMode === "completed") {
     return <ResultsView analysis={{ ...analysis, status: "COMPLETED" }} />;
   }
 
-  if (mode === "failed") {
+  if (effectiveMode === "failed") {
     return (
       <main className="workspace-page failed-analysis-page">
         <Link className="back-link" href="/dashboard">
