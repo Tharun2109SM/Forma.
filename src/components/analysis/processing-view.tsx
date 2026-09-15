@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, LoaderCircle, RotateCcw, Send } from "lucide-react";
+import { ArrowLeft, Check, LoaderCircle, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AnalysisWorkspaceData } from "@/lib/data/analysis";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import type { DocumentStatus, DocumentType } from "@/types/database";
+import "./processing-view.css";
 
 export const processingStages = [
   { code: "PREP", label: "Preparing documents" },
@@ -21,6 +22,7 @@ export const processingStages = [
 type ProcessingDocument = {
   id: string;
   filename: string;
+  file_extension: string;
   document_type: DocumentType;
   status: DocumentStatus;
   extraction_method: "NATIVE" | "OCR" | null;
@@ -36,94 +38,25 @@ type StatusResponse = {
   ready: boolean;
 };
 
-type AskSource = {
-  sourceId: string;
-  candidateName: string | null;
-  filename: string;
-  pageNumber: number | null;
-  excerpt: string;
+const statusLabels: Record<DocumentStatus, string> = {
+  QUEUED: "Queued",
+  UPLOADING: "Uploading",
+  UPLOADED: "Upload confirmed",
+  EXTRACTING: "Extracting",
+  OCR: "OCR fallback",
+  NORMALIZING: "Normalizing",
+  INDEXING: "Embedding / indexing",
+  READY: "Indexed",
+  FAILED: "Failed",
 };
 
-function RecruiterAsk({ analysisId }: { analysisId: string }) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [sources, setSources] = useState<AskSource[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function ask(event: React.FormEvent) {
-    event.preventDefault();
-    if (!question.trim() || loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/analysis/${analysisId}/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-      const payload = (await response.json()) as {
-        answer?: string;
-        sources?: AskSource[];
-        error?: string;
-      };
-      if (!response.ok || !payload.answer) throw new Error(payload.error ?? "Question failed.");
-      setAnswer(payload.answer);
-      setSources(payload.sources ?? []);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The question could not be answered.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className="rag-panel" aria-labelledby="rag-title">
-      <div className="processing-stages-header">
-        <span>KNOWLEDGE BASE / READY</span>
-        <span>EVIDENCE-GROUNDED</span>
-      </div>
-      <div className="rag-panel-body">
-        <h2 id="rag-title">Ask across every uploaded document</h2>
-        <p>Forma. will answer only from this analysis and return the supporting sources.</p>
-        <form onSubmit={ask}>
-          <input
-            aria-label="Question about this candidate pool"
-            maxLength={1_000}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Who has the strongest backend API experience?"
-            value={question}
-          />
-          <button disabled={loading || question.trim().length < 3} type="submit">
-            {loading ? <LoaderCircle className="spin" size={15} /> : <Send size={15} />}
-            Ask
-          </button>
-        </form>
-        {error && <p className="upload-error">{error}</p>}
-        {answer && (
-          <div className="rag-answer" aria-live="polite">
-            <p>{answer}</p>
-            {sources.length > 0 && (
-              <ol>
-                {sources.map((source) => (
-                  <li key={source.sourceId}>
-                    <strong>
-                      [{source.sourceId}] {source.candidateName ?? "Job description"}
-                    </strong>
-                    <span>
-                      {source.filename}
-                      {source.pageNumber ? ` · Page ${source.pageNumber}` : ""}
-                    </span>
-                    <p>“{source.excerpt}”</p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
+function documentStage(status: DocumentStatus) {
+  if (status === "QUEUED" || status === "UPLOADING" || status === "UPLOADED") return "Upload";
+  if (status === "EXTRACTING" || status === "OCR") return "Extract";
+  if (status === "NORMALIZING") return "Normalize";
+  if (status === "INDEXING") return "Embed / index";
+  if (status === "READY") return "Ready";
+  return "Needs attention";
 }
 
 export function ProcessingView({
@@ -137,6 +70,7 @@ export function ProcessingView({
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const processingRef = useRef(false);
+  const stagesRef = useRef<HTMLOListElement>(null);
 
   const refresh = useCallback(async () => {
     if (analysis.isSample) return;
@@ -192,6 +126,38 @@ export function ProcessingView({
     };
   }, [analysis.isSample, refresh]);
 
+  useEffect(() => {
+    if (!stagesRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void import("gsap").then(({ default: gsap }) => {
+      if (cancelled || !stagesRef.current) return;
+      const context = gsap.context(() => {
+        gsap.from("li", {
+          x: -16,
+          opacity: 0,
+          duration: 0.42,
+          stagger: 0.055,
+          ease: "power3.out",
+        });
+        gsap.from(".stage-state", {
+          scaleX: 0,
+          transformOrigin: "left center",
+          duration: 0.7,
+          stagger: 0.055,
+          ease: "power2.out",
+        });
+      }, stagesRef);
+      cleanup = () => context.revert();
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [analysis.id]);
+
   async function retry(document: ProcessingDocument) {
     const response = await fetch(`/api/analyses/${analysis.id}/documents/${document.id}`, {
       method: "PATCH",
@@ -206,106 +172,148 @@ export function ProcessingView({
     await refresh();
   }
 
-  const realCounts = status
-    ? {
-        uploaded: status.documents.filter((item) => item.status !== "UPLOADING").length,
-        extracting: status.documents.filter((item) =>
-          ["NORMALIZING", "INDEXING", "READY"].includes(item.status),
-        ).length,
-        ocr: status.documents.filter((item) => item.ocr_used || item.status === "OCR").length,
-        ready: status.documents.filter((item) => item.status === "READY").length,
-        failed: status.documents.filter((item) => item.status === "FAILED"),
-      }
-    : null;
+  const documents = status?.documents ?? [];
+  const totalDocuments = documents.length;
+  const failedDocuments = documents.filter((document) => document.status === "FAILED");
+  const indexedDocuments = documents.filter((document) => document.status === "READY").length;
+  const confirmedUploads = documents.filter((document) =>
+    ["UPLOADED", "EXTRACTING", "OCR", "NORMALIZING", "INDEXING", "READY"].includes(document.status),
+  ).length;
+  const extractedDocuments = documents.filter((document) =>
+    ["NORMALIZING", "INDEXING", "READY"].includes(document.status),
+  ).length;
+  const normalizedDocuments = documents.filter((document) =>
+    ["INDEXING", "READY"].includes(document.status),
+  ).length;
+  const stageRows = [
+    { code: "01", label: "Upload", detail: `${confirmedUploads} / ${totalDocuments} confirmed`, complete: confirmedUploads === totalDocuments && totalDocuments > 0, active: documents.some((document) => ["QUEUED", "UPLOADING", "UPLOADED"].includes(document.status)) },
+    { code: "02", label: "Extract", detail: `${extractedDocuments} / ${totalDocuments} extracted`, complete: extractedDocuments === totalDocuments && totalDocuments > 0, active: documents.some((document) => ["EXTRACTING", "OCR"].includes(document.status)) },
+    { code: "03", label: "Normalize", detail: `${normalizedDocuments} / ${totalDocuments} normalized`, complete: normalizedDocuments === totalDocuments && totalDocuments > 0, active: documents.some((document) => document.status === "NORMALIZING") },
+    { code: "04", label: "Embed / index", detail: `${indexedDocuments} / ${totalDocuments} indexed`, complete: indexedDocuments === totalDocuments && totalDocuments > 0, active: documents.some((document) => document.status === "INDEXING") },
+    { code: "05", label: "Rank", detail: status?.analysis.status === "COMPLETED" ? "Ranking complete" : status?.ready && indexedDocuments > 0 ? "Resolving ranking" : "Waiting for evidence", complete: status?.analysis.status === "COMPLETED", active: Boolean(status?.ready && indexedDocuments > 0 && status.analysis.status === "PROCESSING") },
+  ];
 
   return (
-    <main className="workspace-page processing-page">
-      <Link className="back-link" href="/dashboard">
-        <ArrowLeft size={15} strokeWidth={1.8} /> Shortlists
+    <main className="workspace-page processing-page processing-workspace">
+      <Link className="back-link" href="/app/analyses">
+        <ArrowLeft size={15} strokeWidth={1.8} /> Analyses
       </Link>
-      <div className="processing-layout">
-        <section className="processing-copy">
-          <span className="page-kicker">ANALYSIS / PROCESSING</span>
-          <h1>Finding the signal.</h1>
-          <p>
-            Forma. is structuring {analysis.candidateCount} candidate resumes against one role.
-          </p>
-          <div className="processing-job">
-            <span>ROLE</span>
-            <strong>{analysis.jobTitle ?? analysis.title}</strong>
-            {analysis.companyName && <small>{analysis.companyName}</small>}
-          </div>
-          <p className="processing-note">
-            {analysis.isSample
-              ? "Preview processing uses labeled sample results and does not persist uploaded files."
-              : "You can leave this page. The analysis remains saved to your account."}
-          </p>
-        </section>
+      <header className="processing-workspace-header">
+        <div>
+          <span className="page-kicker">ANALYSIS / {analysis.isSample ? "SAMPLE SEQUENCE" : "LIVE PROCESSING"}</span>
+          <h1>Building the evidence.</h1>
+          <p>Forma. is structuring {analysis.candidateCount} candidate documents against one role.</p>
+        </div>
+        <div className="processing-role-record">
+          <span>ROLE / REFERENCE</span>
+          <strong>{analysis.jobTitle ?? analysis.title}</strong>
+          {analysis.companyName && <small>{analysis.companyName}</small>}
+          <span className="processing-role-state" role="status">
+            {analysis.isSample ? "Preview only" : status?.analysis.status ?? "Connecting to analysis"}
+          </span>
+        </div>
+      </header>
 
-        <section className="processing-stages" aria-label="Analysis progress" aria-live="polite">
+      <div className="processing-workspace-main">
+        <section className="processing-stages processing-workspace-stages" aria-labelledby="processing-pipeline-title">
           <div className="processing-stages-header">
-            <span>PIPELINE</span>
-            <span>{analysis.candidateCount} CANDIDATES</span>
+            <h2 id="processing-pipeline-title">Pipeline</h2>
+            <span>{analysis.isSample ? "SAMPLE" : `${indexedDocuments} / ${totalDocuments || "—"} INDEXED`}</span>
           </div>
-          {analysis.isSample ? <ol>
-            {processingStages.map((stage, index) => {
-              const complete = index < activeStage;
-              const active = index === activeStage;
-              return (
-                <li
-                  className={`${complete ? "is-complete" : ""} ${active ? "is-active" : ""}`}
-                  key={stage.code}
-                >
+          {analysis.isSample ? (
+            <ol ref={stagesRef}>
+              {processingStages.map((stage, index) => {
+                const complete = index < activeStage;
+                const active = index === activeStage;
+                return (
+                  <li className={`${complete ? "is-complete" : ""} ${active ? "is-active" : ""}`} key={stage.code}>
+                    <span className="stage-code">{stage.code}</span>
+                    <strong>{stage.label}</strong>
+                    <span className="stage-state">{complete ? <Check size={14} /> : active ? <LoaderCircle className="spin" size={14} /> : "WAIT"}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <ol ref={stagesRef}>
+              {stageRows.map((stage) => (
+                <li className={`${stage.complete ? "is-complete" : ""} ${stage.active ? "is-active" : ""}`} key={stage.code}>
                   <span className="stage-code">{stage.code}</span>
                   <strong>{stage.label}</strong>
-                  <span className="stage-state">
-                    {complete ? (
-                      <Check size={14} />
-                    ) : active ? (
-                      <LoaderCircle className="spin" size={14} />
-                    ) : (
-                      "WAIT"
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol> : (
-            <ol>
-              {[
-                ["UP", "Uploading documents", realCounts ? `${realCounts.uploaded} / ${status?.documents.length}` : "WAIT"],
-                ["EXT", "Extracting text", realCounts ? `${realCounts.extracting} / ${status?.documents.length}` : "WAIT"],
-                ["OCR", "OCR fallback", realCounts ? `${realCounts.ocr} scanned PDFs` : "WAIT"],
-                ["IDX", "Indexing knowledge base", status ? `${status.chunkCount} chunks` : "WAIT"],
-                ["READY", "Searchable documents", realCounts ? `${realCounts.ready} / ${status?.documents.length}` : "WAIT"],
-              ].map(([code, label, value]) => (
-                <li className={code === "READY" && status?.ready ? "is-complete" : "is-active"} key={code}>
-                  <span className="stage-code">{code}</span>
-                  <strong>{label}</strong>
-                  <span className="stage-state">{value}</span>
+                  <span className="stage-state">{status ? stage.detail : "Syncing"}</span>
                 </li>
               ))}
             </ol>
           )}
-          {statusError && <p className="upload-error processing-error">{statusError}</p>}
-          {realCounts && realCounts.failed.length > 0 && (
-            <div className="failed-document-list">
-              <span>FAILED DOCUMENTS</span>
-              {realCounts.failed.map((document) => (
-                <div key={document.id}>
-                  <p><strong>{document.filename}</strong><small>{document.error}</small></p>
-                  <button onClick={() => void retry(document)} type="button">
-                    <RotateCcw size={13} /> Retry
-                  </button>
-                </div>
-              ))}
+          <p className="processing-workspace-note">
+            {analysis.isSample
+              ? "This sample sequence is illustrative and does not process uploaded files."
+              : "Keep this page open while processing runs. If you leave, return here to resume."}
+          </p>
+        </section>
+
+        <section className="processing-document-panel" aria-labelledby="processing-documents-title">
+          <div className="processing-document-heading">
+            <div>
+              <span className="page-kicker">DOCUMENT INTELLIGENCE</span>
+              <h2 id="processing-documents-title">Document states</h2>
+            </div>
+            <div className="processing-document-stats" aria-live="polite">
+              <span>{status ? `${totalDocuments} DOCUMENTS` : "SYNCING"}</span>
+              <span>{status ? `${status.chunkCount} CHUNKS` : "— CHUNKS"}</span>
+              {failedDocuments.length > 0 && <span className="is-error">{failedDocuments.length} FAILED</span>}
+            </div>
+          </div>
+          {statusError && <p className="processing-workspace-error" role="alert">{statusError}</p>}
+          {analysis.isSample ? (
+            <div className="processing-document-empty">
+              <strong>No live document states in preview.</strong>
+              <p>Run an authenticated analysis to track individual uploads, extraction, and indexing.</p>
+            </div>
+          ) : !status ? (
+            <div className="processing-document-empty" role="status">
+              <LoaderCircle className="spin" aria-hidden="true" size={16} />
+              <p>Loading document states…</p>
+            </div>
+          ) : documents.length === 0 ? (
+            <div className="processing-document-empty"><p>No documents are attached to this analysis yet.</p></div>
+          ) : (
+            <div className="processing-document-list">
+              <div className="processing-document-table-head" aria-hidden="true">
+                <span>DOC</span><span>DOCUMENT</span><span>PHASE</span><span>STATE</span><span>METHOD</span><span />
+              </div>
+              <ol>
+                {documents.map((document, index) => (
+                  <li className={document.status === "FAILED" ? "is-failed" : document.status === "READY" ? "is-ready" : ""} key={document.id}>
+                    <span className="processing-document-index">{String(index + 1).padStart(2, "0")}</span>
+                    <div className="processing-document-name">
+                      <strong title={document.filename}>{document.filename}</strong>
+                      <small>{document.document_type === "JOB_DESCRIPTION" ? "JOB DESCRIPTION" : "CANDIDATE"} / {document.file_extension.toUpperCase()}</small>
+                    </div>
+                    <span className="processing-document-phase">{documentStage(document.status)}</span>
+                    <span className={`processing-document-status processing-document-status-${document.status.toLowerCase()}`}>
+                      {statusLabels[document.status]}
+                    </span>
+                    <span className="processing-document-method">
+                      {document.ocr_used || document.status === "OCR" ? "OCR" : document.extraction_method ?? "—"}
+                    </span>
+                    <div className="processing-document-action">
+                      {document.status === "FAILED" && (
+                        <button aria-label={`Retry ${document.filename}`} onClick={() => void retry(document)} type="button">
+                          <RotateCcw aria-hidden="true" size={13} /> Retry
+                        </button>
+                      )}
+                    </div>
+                    {document.status === "FAILED" && document.error && (
+                      <p className="processing-document-error">{document.error}</p>
+                    )}
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
         </section>
       </div>
-      {!analysis.isSample && status?.ready && realCounts && realCounts.ready > 0 && (
-        <RecruiterAsk analysisId={analysis.id} />
-      )}
     </main>
   );
 }

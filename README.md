@@ -14,6 +14,12 @@ npm run dev
 
 Without credentials the application intentionally opens a labeled sample workspace. Document selections in preview mode are validated but not persisted.
 
+## Product structure
+
+The public site lives at `/`, `/product`, `/method`, `/security`, and `/pricing`. The authenticated product uses a separate SaaS shell under `/app`, with analysis, candidate, document, and settings libraries. Legacy `/dashboard` and `/analysis/*` links redirect to their canonical `/app/*` equivalents without dropping query parameters.
+
+The app shell supports a full desktop rail, a compact tablet rail, a mobile navigation sheet, light and dark themes, and a Cmd/Ctrl+K command menu. List search, filters, sorting, and pagination are URL-backed so views remain linkable and server-rendered.
+
 ## Configuration
 
 - `NEXT_PUBLIC_SITE_URL`
@@ -58,6 +64,8 @@ PDF extraction uses the serverless PDF.js build from `unpdf`. A deterministic qu
 Normalized documents are chunked at approximately 700 tokens with roughly 100 tokens of overlap. Every chunk retains user, analysis, document, candidate, filename, file extension, page when available, index, and section provenance. OpenAI `text-embedding-3` models are requested with 1,536 dimensions, matching the database type, and chunks are idempotently upserted on `(document_id, chunk_index)`.
 
 `POST /api/analysis/{analysisId}/ask` authenticates the recruiter, verifies analysis ownership, embeds the question, calls `match_document_chunks`, diversifies evidence across documents, attaches existing deterministic ranking metadata, and requests an evidence-only answer. The response includes source filename, candidate, page, chunk, excerpt, and similarity. The model does not assign or change ranks.
+
+Completed results expose this endpoint through the **Ask Forma.** analysis tab. It is enabled only when owner-visible indexed chunks exist, keeps its conversation in page state, supports Enter/Shift+Enter, and renders every returned source as expandable provenance with document type, filename, page/section when present, excerpt, and retrieval relevance. No chat content is persisted.
 
 ## Database and checks
 

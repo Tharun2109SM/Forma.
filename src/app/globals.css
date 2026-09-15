@@ -1,23 +1,29 @@
 @import "tailwindcss";
 @import "../styles/product.css";
+@import "../styles/redesign.css";
 
 :root {
-  --background: #f8f8f7;
-  --foreground: #111111;
+  --background: #f6f5f0;
+  --foreground: #11110f;
   --surface: #ffffff;
-  --surface-raised: #fcfcfb;
-  --muted: #6f706d;
-  --muted-strong: #454644;
-  --border: #dededb;
-  --border-strong: #c2c3bf;
-  --signal: #155dfc;
+  --surface-raised: #fbfaf6;
+  --muted: #565650;
+  --muted-strong: #2a2a27;
+  --border: #e2e0d8;
+  --border-strong: #c9c7be;
+  --signal: #175cff;
   --signal-strong: #0f4ee3;
-  --signal-soft: #edf3ff;
+  --signal-soft: #eaf0ff;
   --positive: #16794b;
   --warning: #9b6513;
   --negative: #b83b3b;
-  --grid-line: rgba(17, 17, 17, 0.052);
-  --selection: rgba(21, 93, 252, 0.16);
+  --grid-line: rgba(17, 17, 15, 0.055);
+  --grid-line-strong: rgba(17, 17, 15, 0.16);
+  --grid-line-active: #175cff;
+  --grid-line-error: #b83b3b;
+  --grid-node: #175cff;
+  --grid-gutter: clamp(20px, 4vw, 72px);
+  --selection: rgba(23, 92, 255, 0.16);
 }
 
 .dark {
@@ -36,6 +42,10 @@
   --warning: #d5a451;
   --negative: #dc6a6a;
   --grid-line: rgba(255, 255, 255, 0.052);
+  --grid-line-strong: rgba(255, 255, 255, 0.14);
+  --grid-line-active: #5f8bff;
+  --grid-line-error: #dc6a6a;
+  --grid-node: #5f8bff;
   --selection: rgba(91, 140, 255, 0.24);
 }
 

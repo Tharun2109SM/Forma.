@@ -17,6 +17,12 @@ function metadataString(metadata: unknown, key: string) {
   return typeof value === "string" ? value : null;
 }
 
+function errorStatus(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : null;
+}
+
 function diversify<T extends { document_id: string; document_type: string }>(rows: T[]) {
   const counts = new Map<string, number>();
   const selected: T[] = [];
@@ -57,15 +63,53 @@ export async function POST(
 
   const { data: analysis } = await supabase
     .from("analyses")
-    .select("id")
+    .select("id,status")
     .eq("id", analysisId.data)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!analysis) return NextResponse.json({ error: "Analysis not found." }, { status: 404 });
 
+  if (analysis.status !== "COMPLETED") {
+    return NextResponse.json(
+      { error: "Forma. is still indexing these documents.", code: "ANALYSIS_NOT_READY" },
+      { status: 409 },
+    );
+  }
+
+  const { count: indexedChunkCount, error: countError } = await supabase
+    .from("document_chunks")
+    .select("id", { count: "exact", head: true })
+    .eq("analysis_id", analysisId.data);
+  if (countError) {
+    return NextResponse.json(
+      { error: "Indexed evidence could not be checked.", code: "RETRIEVAL_ERROR" },
+      { status: 502 },
+    );
+  }
+  if (!indexedChunkCount) {
+    return NextResponse.json(
+      { error: "No indexed document evidence is available yet.", code: "NO_INDEXED_CHUNKS" },
+      { status: 409 },
+    );
+  }
+
+  let queryEmbedding: number[];
   try {
-    const queryEmbedding = await embedText(body.data.question);
-    const { data: matches, error: matchError } = await supabase.rpc(
+    queryEmbedding = await embedText(body.data.question);
+  } catch (error) {
+    const rateLimited = errorStatus(error) === 429;
+    return NextResponse.json(
+      {
+        error: rateLimited
+          ? "Forma. is receiving too many questions. Try again shortly."
+          : "The AI service is temporarily unavailable.",
+        code: rateLimited ? "RATE_LIMITED" : "OPENAI_ERROR",
+      },
+      { status: rateLimited ? 429 : 502 },
+    );
+  }
+
+  const { data: thresholdMatches, error: matchError } = await supabase.rpc(
       "match_document_chunks",
       {
         p_analysis_id: analysisId.data,
@@ -74,25 +118,55 @@ export async function POST(
         p_similarity_threshold: 0.2,
       },
     );
-    if (matchError) throw matchError;
+  if (matchError) {
+    return NextResponse.json(
+      { error: "Document evidence could not be retrieved.", code: "RETRIEVAL_ERROR" },
+      { status: 502 },
+    );
+  }
 
-    const selected = diversify(matches ?? []);
-    if (selected.length === 0) {
-      return NextResponse.json({
-        answer: "The uploaded documents do not contain enough relevant evidence to answer that question.",
-        sources: [],
-      });
+  let matches = thresholdMatches ?? [];
+  if (matches.length === 0) {
+    const { data: fallbackMatches, error: fallbackError } = await supabase.rpc(
+      "match_document_chunks",
+      {
+        p_analysis_id: analysisId.data,
+        p_query_embedding: queryEmbedding,
+        p_match_count: 16,
+        p_similarity_threshold: -1,
+      },
+    );
+    if (fallbackError) {
+      return NextResponse.json(
+        { error: "Document evidence could not be retrieved.", code: "RETRIEVAL_ERROR" },
+        { status: 502 },
+      );
     }
+    matches = fallbackMatches ?? [];
+  }
 
-    const { data: candidateRows, error: candidateError } = await supabase
+  const selected = diversify(matches);
+  if (selected.length === 0) {
+    return NextResponse.json(
+      { error: "No sufficiently relevant document evidence was found.", code: "NO_RELEVANT_EVIDENCE" },
+      { status: 422 },
+    );
+  }
+
+  const { data: candidateRows, error: candidateError } = await supabase
       .from("candidates")
       .select(
         "id,name,rank,final_score,semantic_score,keyword_score,skill_score,matched_skills,missing_skills",
       )
       .eq("analysis_id", analysisId.data);
-    if (candidateError) throw candidateError;
+  if (candidateError) {
+    return NextResponse.json(
+      { error: "Stored ranking evidence could not be retrieved.", code: "RETRIEVAL_ERROR" },
+      { status: 502 },
+    );
+  }
 
-    const sources: RagEvidence[] = selected.map((match, index) => ({
+  const sources: RagEvidence[] = selected.map((match, index) => ({
       sourceId: `S${index + 1}`,
       candidateId: match.candidate_id,
       candidateName: metadataString(match.metadata, "candidateName"),
@@ -100,10 +174,12 @@ export async function POST(
       documentType: match.document_type,
       filename: match.filename,
       pageNumber: match.page_number,
+      section: match.section_label,
       chunkIndex: match.chunk_index,
       excerpt: match.content.slice(0, 1_200),
       similarity: Number(match.similarity),
     }));
+  try {
     const answer = await answerRecruiterQuestion({
       question: body.data.question,
       evidence: sources,
@@ -121,10 +197,16 @@ export async function POST(
     });
 
     return NextResponse.json({ answer, sources });
-  } catch {
+  } catch (error) {
+    const rateLimited = errorStatus(error) === 429;
     return NextResponse.json(
-      { error: "Forma could not answer that question right now." },
-      { status: 500 },
+      {
+        error: rateLimited
+          ? "Forma. is receiving too many questions. Try again shortly."
+          : "The AI service could not produce an answer right now.",
+        code: rateLimited ? "RATE_LIMITED" : "OPENAI_ERROR",
+      },
+      { status: rateLimited ? 429 : 502 },
     );
   }
 }

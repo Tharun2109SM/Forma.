@@ -1,0 +1,141 @@
+.ask-forma-workspace {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--background);
+}
+
+.ask-forma-workspace-drawer {
+  height: 100%;
+}
+
+.ask-forma-workspace-embedded {
+  min-height: 640px;
+  border-top: 2px solid var(--foreground);
+}
+
+.ask-forma-workspace-embedded .ask-forma-header {
+  min-height: 128px;
+  padding: 27px 0 26px;
+}
+
+.ask-forma-workspace-embedded .ask-forma-header h2 {
+  font-size: clamp(30px, 3.8vw, 48px);
+}
+
+.ask-forma-workspace-embedded .ask-forma-header p {
+  max-width: 560px;
+  font-size: 13px;
+}
+
+.ask-forma-workspace-embedded .ask-forma-conversation {
+  min-height: 330px;
+  padding: 28px 0 36px;
+  overflow: visible;
+  background-size: 12.5% 100%;
+}
+
+.ask-forma-workspace-embedded .ask-forma-empty {
+  max-width: 820px;
+  min-height: 320px;
+}
+
+.ask-forma-workspace-embedded .ask-forma-empty > div {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ask-forma-workspace-embedded .ask-forma-empty > div button {
+  padding-right: 20px;
+  border-right: 1px solid var(--border);
+}
+
+.ask-forma-workspace-embedded .ask-forma-empty > div button:nth-child(2n) {
+  padding-left: 20px;
+  border-right: 0;
+}
+
+.ask-forma-workspace-embedded .ask-forma-composer {
+  padding: 18px 0 24px;
+  background: var(--background);
+}
+
+.ask-forma-workspace-embedded .ask-forma-composer > div {
+  max-width: 900px;
+}
+
+.ask-forma-workspace .ask-forma-messages {
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+
+.ask-forma-workspace .ask-message {
+  padding: 22px 0;
+  grid-template-columns: minmax(72px, 0.22fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ask-forma-workspace .ask-message > span {
+  padding-top: 3px;
+  text-align: left;
+}
+
+.ask-forma-workspace .ask-message > p {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+}
+
+.ask-forma-workspace .ask-forma-response-copy,
+.ask-forma-workspace .ask-forma-sources {
+  grid-column: 2;
+}
+
+.ask-forma-workspace .ask-forma-sources {
+  max-width: 760px;
+  margin-top: 7px;
+}
+
+.ask-forma-workspace .ask-forma-sources details {
+  background: var(--background);
+}
+
+.ask-forma-drawer {
+  display: block;
+}
+
+.ask-forma-drawer .ask-forma-motion-shell {
+  height: 100%;
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .ask-forma-workspace-embedded .ask-forma-header {
+    padding-block: 24px;
+  }
+
+  .ask-forma-workspace-embedded .ask-forma-empty > div {
+    grid-template-columns: 1fr;
+  }
+
+  .ask-forma-workspace-embedded .ask-forma-empty > div button,
+  .ask-forma-workspace-embedded .ask-forma-empty > div button:nth-child(2n) {
+    padding-inline: 4px;
+    border-right: 0;
+  }
+
+  .ask-forma-workspace .ask-message {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .ask-forma-workspace .ask-forma-response-copy,
+  .ask-forma-workspace .ask-forma-sources {
+    grid-column: 1;
+  }
+}

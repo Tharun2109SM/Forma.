@@ -13,10 +13,12 @@ export function AnalysisWorkspace({
   analysis,
   initialMode,
   resolvePreview,
+  initialCandidateId,
 }: {
   analysis: AnalysisWorkspaceData;
   initialMode: WorkspaceMode;
   resolvePreview: boolean;
+  initialCandidateId?: string;
 }) {
   const [mode, setMode] = useState<WorkspaceMode>(initialMode);
   const [activeStage, setActiveStage] = useState(0);
@@ -48,13 +50,18 @@ export function AnalysisWorkspace({
   }, [mode, resolvePreview]);
 
   if (effectiveMode === "completed") {
-    return <ResultsView analysis={{ ...analysis, status: "COMPLETED" }} />;
+    return (
+      <ResultsView
+        analysis={{ ...analysis, status: "COMPLETED" }}
+        initialCandidateId={initialCandidateId}
+      />
+    );
   }
 
   if (effectiveMode === "failed") {
     return (
       <main className="workspace-page failed-analysis-page">
-        <Link className="back-link" href="/dashboard">
+        <Link className="back-link" href="/app/analyses">
           <ArrowLeft size={15} /> Shortlists
         </Link>
         <section className="failure-state">
@@ -68,10 +75,10 @@ export function AnalysisWorkspace({
             Start a new analysis or try again once the service connection is available.
           </p>
           <div>
-            <Link className="primary-action" href="/analysis/new">
+            <Link className="primary-action" href="/app/analyses/new">
               New analysis <ArrowRight size={15} />
             </Link>
-            <Link className="secondary-action" href="/dashboard">
+            <Link className="secondary-action" href="/app/analyses">
               Return to shortlists
             </Link>
           </div>

@@ -1,13 +1,6 @@
-import type { Metadata } from "next";
-import { NewAnalysisForm } from "@/components/analysis/new-analysis-form";
-import { hasR2Env, hasSupabaseEnv } from "@/lib/env";
+import { redirect } from "next/navigation";
+import { redirectQuery, type AppSearchParams } from "@/lib/data/app-route-params";
 
-export const metadata: Metadata = { title: "New analysis" };
-
-export default function NewAnalysisPage() {
-  return (
-    <main className="workspace-page new-analysis-page">
-      <NewAnalysisForm demoMode={!hasSupabaseEnv() || !hasR2Env()} />
-    </main>
-  );
+export default async function LegacyNewAnalysisPage({ searchParams }: { searchParams: AppSearchParams }) {
+  redirect(`/app/analyses/new${redirectQuery(await searchParams)}`);
 }

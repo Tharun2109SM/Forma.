@@ -10,6 +10,7 @@ import {
   type QueuedDocumentStatus,
 } from "@/components/analysis/file-dropzone";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import "./new-analysis-form.css";
 
 const UPLOAD_CONCURRENCY = Math.min(
   8,
@@ -66,6 +67,14 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
   const [prepared, setPrepared] = useState<PreparedAnalysis | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedDocuments = [...jobDescription, ...resumes];
+  const selectedFormats = Array.from(
+    new Set(
+      selectedDocuments.map(({ file }) => file.name.split(".").at(-1)?.toUpperCase()),
+    ),
+  )
+    .filter((format): format is string => Boolean(format))
+    .join(" / ");
 
   function updateFile(
     field: "jobDescription" | "resume",
@@ -235,7 +244,7 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
       }
 
       router.push(
-        `/analysis/${analysis.id}?state=processing${analysis.preview ? "&preview=1" : ""}`,
+        `/app/analyses/${analysis.id}?state=processing${analysis.preview ? "&preview=1" : ""}`,
       );
     } catch (cause) {
       setError(
@@ -248,42 +257,48 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
   }
 
   return (
-    <form className="new-analysis-form" onSubmit={handleSubmit}>
+    <form className="new-analysis-form intake-form" onSubmit={handleSubmit}>
       <header className="new-analysis-header">
-        <Link className="back-link" href="/dashboard">
-          <ArrowLeft size={15} strokeWidth={1.8} /> Shortlists
+        <Link className="back-link" href="/app/analyses">
+          <ArrowLeft size={15} strokeWidth={1.8} /> Analyses
         </Link>
         <div className="new-analysis-title">
           <div>
-            <span className="page-kicker">NEW ANALYSIS / DRAFT</span>
-            <h1>Create a candidate shortlist</h1>
-            <p>Start with one role, then add every resume you want Forma. to compare.</p>
+            <span className="page-kicker">WORKSPACE / NEW ANALYSIS</span>
+            <h1>Build an analysis.</h1>
+            <p>Define the role, add the source documents, then review before processing.</p>
           </div>
           {demoMode && <span className="demo-badge">PREVIEW MODE</span>}
         </div>
+        <nav className="intake-wayfinding" aria-label="Analysis setup sections">
+          <a href="#intake-role"><span>01</span> Role</a>
+          <a href="#intake-job-description"><span>02</span> Job description</a>
+          <a href="#intake-candidates"><span>03</span> Candidates</a>
+          <a href="#intake-review"><span>04</span> Review</a>
+        </nav>
       </header>
 
-      <section className="analysis-details" aria-labelledby="details-title">
-        <div className="analysis-details-heading">
-          <span className="upload-index">00</span>
+      <section className="intake-stage" id="intake-role" aria-labelledby="intake-role-title">
+        <div className="intake-stage-heading">
+          <span className="intake-stage-number">01 / ROLE</span>
           <div>
-            <h2 id="details-title">Analysis details</h2>
-            <p>Name the shortlist so it is easy to reopen later.</p>
+            <h2 id="intake-role-title">Set the context.</h2>
+            <p>Give this analysis a name you will recognize in your workspace.</p>
           </div>
         </div>
-        <div className="detail-fields">
+        <div className="detail-fields intake-stage-body">
           <label className="field-label field-wide">
             Analysis title
             <input
               className="field-input"
-              defaultValue="Frontend Engineer shortlist"
               maxLength={90}
               name="title"
+              placeholder="Senior Frontend Engineer shortlist"
               required
             />
           </label>
           <label className="field-label">
-            Job title <span>Optional</span>
+            <span className="intake-field-heading">Job title <em>Optional</em></span>
             <input
               className="field-input"
               maxLength={90}
@@ -292,7 +307,7 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
             />
           </label>
           <label className="field-label">
-            Company <span>Optional</span>
+            <span className="intake-field-heading">Company <em>Optional</em></span>
             <input
               className="field-input"
               maxLength={90}
@@ -303,42 +318,98 @@ export function NewAnalysisForm({ demoMode }: { demoMode: boolean }) {
         </div>
       </section>
 
-      <FileDropzone
-        description="Add the single role description Forma. should use as the reference."
-        disabled={submitting}
-        files={jobDescription}
-        id="job-description"
-        label="Job description"
-        multiple={false}
-        onRetry={(file) => void retryFile(file)}
-        onChange={setJobDescription}
-        selectionLocked={Boolean(prepared)}
-      />
+      <section className="intake-stage intake-upload-stage" id="intake-job-description" aria-labelledby="intake-jd-title">
+        <div className="intake-stage-heading">
+          <span className="intake-stage-number">02 / JOB DESCRIPTION</span>
+          <div>
+            <h2 id="intake-jd-title">Add the reference.</h2>
+            <p>Forma. uses this document as the source of requirements for every candidate.</p>
+          </div>
+        </div>
+        <div className="intake-stage-body">
+          <FileDropzone
+            description="Add the single role description Forma. should use as the reference."
+            disabled={submitting}
+            files={jobDescription}
+            id="job-description"
+            label="Job description"
+            multiple={false}
+            onRetry={(file) => void retryFile(file)}
+            onChange={setJobDescription}
+            selectionLocked={Boolean(prepared)}
+          />
+        </div>
+      </section>
 
-      <FileDropzone
-        description="Add all candidate resumes. Every valid document will appear in the final ranking."
-        disabled={submitting}
-        files={resumes}
-        id="candidate-resumes"
-        label="Candidate resumes"
-        multiple
-        maxFiles={MAX_RESUMES}
-        onChange={setResumes}
-        onRetry={(file) => void retryFile(file)}
-        selectionLocked={Boolean(prepared)}
-      />
+      <section className="intake-stage intake-upload-stage" id="intake-candidates" aria-labelledby="intake-candidates-title">
+        <div className="intake-stage-heading">
+          <span className="intake-stage-number">03 / CANDIDATES</span>
+          <div>
+            <h2 id="intake-candidates-title">Add the people.</h2>
+            <p>Upload one or many candidate documents. Each processed resume gets its own result.</p>
+          </div>
+        </div>
+        <div className="intake-stage-body">
+          <FileDropzone
+            description="Add all candidate resumes. Successfully processed documents appear in the final ranking."
+            disabled={submitting}
+            files={resumes}
+            id="candidate-resumes"
+            label="Candidate resumes"
+            multiple
+            maxFiles={MAX_RESUMES}
+            onChange={setResumes}
+            onRetry={(file) => void retryFile(file)}
+            selectionLocked={Boolean(prepared)}
+          />
+        </div>
+      </section>
+
+      <section className="intake-stage intake-review-stage" id="intake-review" aria-labelledby="intake-review-title">
+        <div className="intake-stage-heading">
+          <span className="intake-stage-number">04 / REVIEW</span>
+          <div>
+            <h2 id="intake-review-title">Check the intake.</h2>
+            <p>Confirm the reference and candidate set before starting the analysis.</p>
+          </div>
+        </div>
+        <div className="intake-stage-body">
+          <dl className="intake-review-list">
+            <div>
+              <dt>Job description</dt>
+              <dd title={jobDescription[0]?.file.name}>
+                {jobDescription[0]?.file.name ?? "Waiting for a document"}
+              </dd>
+            </div>
+            <div>
+              <dt>Candidate documents</dt>
+              <dd>{resumes.length} {resumes.length === 1 ? "resume" : "resumes"}</dd>
+            </div>
+            <div>
+              <dt>Selected formats</dt>
+              <dd>{selectedFormats || "None yet"}</dd>
+            </div>
+          </dl>
+          <div className="intake-trust-note">
+            <ShieldCheck aria-hidden="true" size={17} strokeWidth={1.7} />
+            <p>
+              {demoMode
+                ? "Preview mode validates your selection but does not persist files."
+                : "Documents are private to your account. Raw files are stored in R2, never in Postgres."}
+            </p>
+          </div>
+        </div>
+      </section>
 
       <footer className="analysis-submit-bar">
-        <div>
-          <ShieldCheck size={16} strokeWidth={1.7} />
-          <p>
-            {demoMode
-              ? "Preview mode validates your selection but does not persist files."
-              : "Documents are private to your account. Raw files are stored in R2, never in Postgres."}
-          </p>
+        <div className="intake-submit-status" aria-live="polite">
+          <span>{jobDescription.length === 1 && resumes.length > 0 ? "READY TO START" : "INTAKE INCOMPLETE"}</span>
+          <p>{jobDescription.length === 1 && resumes.length > 0
+            ? `1 role document · ${resumes.length} ${resumes.length === 1 ? "candidate" : "candidates"}`
+            : "Add one job description and at least one candidate."}</p>
         </div>
         <div className="submit-actions">
-          <Link className="secondary-action" href="/dashboard">
+          <Link className="secondary-action" href="/app/analyses">
             Cancel
           </Link>
           <button

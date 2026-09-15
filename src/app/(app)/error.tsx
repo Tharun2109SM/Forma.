@@ -17,7 +17,7 @@ export default function RecruiterWorkspaceError({ reset }: { reset: () => void }
           <button className="primary-action" onClick={() => reset()} type="button">
             <RotateCcw size={15} /> Try again
           </button>
-          <Link className="secondary-action" href="/dashboard">
+          <Link className="secondary-action" href="/app">
             Return to shortlists <ArrowRight size={15} />
           </Link>
         </div>

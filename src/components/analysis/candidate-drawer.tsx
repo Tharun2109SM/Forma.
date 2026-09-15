@@ -1,9 +1,11 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, FileText, Minus, X } from "lucide-react";
+import { Check, Minus, X } from "lucide-react";
+import { motion } from "motion/react";
 import type { RefObject } from "react";
 import type { CandidateResult } from "@/lib/data/demo-candidates";
+import { CandidateEvidence } from "@/components/analysis/candidate-evidence";
 
 function SignalRow({
   code,
@@ -34,11 +36,15 @@ export function CandidateDrawer({
   onClose,
   returnFocusRef,
   totalCandidates,
+  analysisId,
+  isSample,
 }: {
   candidate: CandidateResult | null;
   onClose: () => void;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
   totalCandidates: number;
+  analysisId: string;
+  isSample: boolean;
 }) {
   return (
     <Dialog.Root open={Boolean(candidate)} onOpenChange={(open) => !open && onClose()}>
@@ -52,7 +58,12 @@ export function CandidateDrawer({
           }}
         >
           {candidate && (
-            <>
+            <motion.div
+              animate={{ opacity: 1, x: 0 }}
+              className="drawer-motion-shell"
+              initial={{ opacity: 0, x: 28 }}
+              transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+            >
               <header className="drawer-header">
                 <div>
                   <span className="page-kicker">
@@ -140,21 +151,16 @@ export function CandidateDrawer({
                 </div>
               </section>
 
-              {candidate.evidence.length > 0 && (
-                <section className="drawer-section" aria-labelledby="evidence-title">
-                  <div className="drawer-section-heading">
-                    <h2 id="evidence-title">Resume evidence</h2>
-                  </div>
-                  <div className="evidence-list">
-                    {candidate.evidence.map((evidence) => (
-                      <blockquote key={evidence}>
-                        <FileText aria-hidden="true" size={14} />
-                        <p>“{evidence}”</p>
-                      </blockquote>
-                    ))}
-                  </div>
-                </section>
-              )}
+              <section className="drawer-section" aria-labelledby="evidence-title">
+                <div className="drawer-section-heading"><h2 id="evidence-title">Resume evidence</h2></div>
+                <CandidateEvidence
+                  analysisId={analysisId}
+                  candidateId={candidate.id}
+                  filename={candidate.resumeFilename}
+                  isSample={isSample}
+                  sampleEvidence={candidate.evidence}
+                />
+              </section>
 
               {candidate.explanation && (
                 <section className="drawer-section explanation-section" aria-labelledby="explanation-title">
@@ -163,7 +169,7 @@ export function CandidateDrawer({
                   <p>{candidate.explanation}</p>
                 </section>
               )}
-            </>
+            </motion.div>
           )}
         </Dialog.Content>
       </Dialog.Portal>

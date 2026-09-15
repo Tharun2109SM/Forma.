@@ -14,7 +14,10 @@ export type AnalysisWorkspaceData = {
   candidateCount: number;
   status: AnalysisStatus;
   createdAt: string;
+  updatedAt: string;
+  jdFilename: string | null;
   candidates: CandidateResult[];
+  indexedChunkCount: number;
   isSample: boolean;
 };
 
@@ -28,7 +31,8 @@ export async function getAnalysis(
   viewer: Viewer,
   id: string,
 ): Promise<AnalysisWorkspaceData | null> {
-  if (viewer.isDemo || id.startsWith("demo")) {
+  if (viewer.isDemo) {
+    if (!["demo", "demo-product", "demo-data", "demo-new"].includes(id)) return null;
     return {
       id,
       title:
@@ -52,7 +56,10 @@ export async function getAnalysis(
       candidateCount: demoCandidates.length,
       status: id === "demo-product" ? "PROCESSING" : "COMPLETED",
       createdAt: "2026-09-12T08:30:00.000Z",
+      updatedAt: "2026-09-12T08:30:00.000Z",
+      jdFilename: "role_description.pdf",
       candidates: demoCandidates,
+      indexedChunkCount: 0,
       isSample: true,
     };
   }
@@ -61,20 +68,26 @@ export async function getAnalysis(
   const { data: analysis, error } = await supabase
     .from("analyses")
     .select(
-      "id,title,job_title,company_name,candidate_count,status,created_at",
+      "id,title,job_title,company_name,jd_filename,candidate_count,status,created_at,updated_at",
     )
     .eq("id", id)
     .maybeSingle();
 
   if (error || !analysis) return null;
 
-  const { data: candidates } = await supabase
-    .from("candidates")
-    .select(
-      "id,name,email,resume_filename,semantic_score,keyword_score,skill_score,final_score,rank,matched_skills,missing_skills,explanation",
-    )
-    .eq("analysis_id", id)
-    .order("rank", { ascending: true, nullsFirst: false });
+  const [{ data: candidates }, { count: indexedChunkCount }] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select(
+        "id,name,email,resume_filename,semantic_score,keyword_score,skill_score,final_score,rank,matched_skills,missing_skills,explanation",
+      )
+      .eq("analysis_id", id)
+      .order("rank", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("document_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_id", id),
+  ]);
 
   return {
     id: analysis.id,
@@ -84,6 +97,8 @@ export async function getAnalysis(
     candidateCount: analysis.candidate_count,
     status: analysis.status,
     createdAt: analysis.created_at,
+    updatedAt: analysis.updated_at,
+    jdFilename: analysis.jd_filename,
     candidates: (candidates ?? []).map((candidate, index) => ({
       id: candidate.id,
       rank: candidate.rank ?? index + 1,
@@ -99,6 +114,7 @@ export async function getAnalysis(
       explanation: candidate.explanation,
       evidence: [],
     })),
+    indexedChunkCount: indexedChunkCount ?? 0,
     isSample: false,
   };
 }

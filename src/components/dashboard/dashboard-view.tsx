@@ -19,7 +19,7 @@ export function DashboardView({ analyses }: { analyses: AnalysisSummary[] }) {
           <h1>Candidate shortlists</h1>
           <p>Review previous analyses or begin with a new role.</p>
         </div>
-        <Link className="primary-action" href="/analysis/new">
+        <Link className="primary-action" href="/app/analyses/new">
           <Plus size={16} strokeWidth={1.8} /> New analysis
         </Link>
       </header>
@@ -32,7 +32,7 @@ export function DashboardView({ analyses }: { analyses: AnalysisSummary[] }) {
           <span className="app-meta-label">NO ANALYSES YET</span>
           <h2>Your first shortlist starts with one role.</h2>
           <p>Add a job description and the resumes you want to compare.</p>
-          <Link className="primary-action" href="/analysis/new">
+          <Link className="primary-action" href="/app/analyses/new">
             Create analysis <ArrowRight size={16} />
           </Link>
         </section>

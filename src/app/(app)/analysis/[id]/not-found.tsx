@@ -8,7 +8,7 @@ export default function AnalysisNotFound() {
         <span className="app-meta-label">ANALYSIS / NOT FOUND</span>
         <h1>This shortlist is unavailable.</h1>
         <p>It may have been removed, or it belongs to a different account.</p>
-        <Link className="primary-action" href="/dashboard">
+        <Link className="primary-action" href="/app/analyses">
           <ArrowLeft size={15} /> Return to shortlists
         </Link>
       </section>

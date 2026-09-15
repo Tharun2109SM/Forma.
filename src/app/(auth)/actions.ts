@@ -38,7 +38,7 @@ export async function loginAction(
   }
 
   if (!hasSupabaseEnv()) {
-    redirect("/dashboard?demo=1");
+    redirect("/app?demo=1");
   }
 
   const supabase = await createClient();
@@ -48,7 +48,7 @@ export async function loginAction(
     return { error: "That email and password combination was not accepted." };
   }
 
-  redirect("/dashboard");
+  redirect("/app");
 }
 
 export async function signupAction(
@@ -66,7 +66,7 @@ export async function signupAction(
   }
 
   if (!hasSupabaseEnv()) {
-    redirect("/dashboard?demo=1");
+    redirect("/app?demo=1");
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
@@ -89,7 +89,7 @@ export async function signupAction(
   }
 
   if (data.session) {
-    redirect("/dashboard");
+    redirect("/app");
   }
 
   return {

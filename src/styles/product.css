@@ -1194,6 +1194,51 @@
   letter-spacing: 0.035em;
 }
 
+.results-actions {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.ask-forma-trigger {
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--signal);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--signal);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.ask-forma-trigger:hover:not(:disabled),
+.ask-forma-trigger:focus-visible {
+  border-color: var(--foreground);
+  background: var(--foreground);
+}
+
+.ask-forma-trigger:disabled {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.ask-forma-disabled-copy {
+  max-width: 230px;
+  margin-top: -6px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+}
+
 .preview-disclosure {
   min-height: 54px;
   padding: 10px 14px;
@@ -1512,6 +1557,414 @@
   background: var(--background);
   box-shadow: -18px 0 44px rgba(0, 0, 0, 0.14);
   animation: drawer-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ask-forma-drawer {
+  width: min(460px, calc(100vw - 40px));
+  height: calc(100dvh - 68px);
+  position: fixed;
+  z-index: 70;
+  inset: 68px 0 0 auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-left: 1px solid var(--border-strong);
+  outline: none;
+  background: var(--background);
+  box-shadow: -18px 0 44px rgba(0, 0, 0, 0.14);
+  animation: drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ask-forma-header {
+  min-height: 130px;
+  padding: 24px 24px 21px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.ask-forma-header h2 {
+  margin: 12px 0 7px;
+  font-size: 29px;
+  font-weight: 560;
+  letter-spacing: -0.05em;
+}
+
+.ask-forma-header p {
+  max-width: 320px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ask-forma-header > button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.ask-forma-header > button:hover,
+.ask-forma-header > button:focus-visible {
+  border-color: var(--foreground);
+  color: var(--foreground);
+}
+
+.ask-forma-conversation {
+  min-height: 0;
+  padding: 22px 24px 28px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ask-forma-empty {
+  min-height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.ask-forma-empty > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--signal) 34%, var(--border));
+  border-radius: 6px;
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.ask-forma-empty h2 {
+  margin: 20px 0 8px;
+  font-size: 20px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+
+.ask-forma-empty > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ask-forma-empty > div {
+  width: 100%;
+  margin-top: 25px;
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.ask-forma-empty > div button {
+  min-height: 50px;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ask-forma-empty > div button:hover,
+.ask-forma-empty > div button:focus-visible {
+  color: var(--signal);
+}
+
+.ask-forma-messages {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 24px;
+  list-style: none;
+}
+
+.ask-message {
+  display: grid;
+  gap: 8px;
+}
+
+.ask-message > span,
+.ask-forma-sources > span {
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+}
+
+.ask-message > p {
+  max-width: 86%;
+  margin: 0 0 0 auto;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--signal) 28%, var(--border));
+  border-radius: 8px 8px 2px 8px;
+  background: var(--signal-soft);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.ask-message-recruiter > span {
+  text-align: right;
+}
+
+.ask-forma-response-copy {
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ask-forma-response-copy p,
+.ask-forma-response-copy ul,
+.ask-forma-response-copy ol {
+  margin: 0 0 11px;
+}
+
+.ask-forma-response-copy p:last-child,
+.ask-forma-response-copy ul:last-child,
+.ask-forma-response-copy ol:last-child {
+  margin-bottom: 0;
+}
+
+.ask-forma-response-copy ul,
+.ask-forma-response-copy ol {
+  padding-left: 19px;
+}
+
+.ask-forma-sources {
+  margin-top: 8px;
+  display: grid;
+  gap: 7px;
+}
+
+.ask-forma-sources > span {
+  margin-bottom: 2px;
+  color: var(--signal);
+}
+
+.ask-forma-sources details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.ask-forma-sources summary {
+  min-height: 50px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ask-forma-sources summary::-webkit-details-marker {
+  display: none;
+}
+
+.ask-source-id {
+  color: var(--signal);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+}
+
+.ask-forma-sources summary > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ask-forma-sources summary strong,
+.ask-forma-sources summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ask-forma-sources summary strong {
+  font-size: 11px;
+  font-weight: 560;
+}
+
+.ask-forma-sources summary small {
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+}
+
+.ask-forma-sources summary svg {
+  color: var(--muted);
+  transition: transform 150ms ease;
+}
+
+.ask-forma-sources details[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.ask-source-body {
+  padding: 0 10px 12px 47px;
+}
+
+.ask-source-body > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ask-source-body > div span {
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ask-source-body p {
+  margin: 10px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.ask-source-body p svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--signal);
+}
+
+.ask-forma-loading,
+.ask-forma-error {
+  margin: 18px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ask-forma-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.ask-forma-error {
+  padding: 10px 12px;
+  border-left: 2px solid var(--negative);
+  background: color-mix(in srgb, var(--negative) 7%, transparent);
+  color: var(--negative);
+}
+
+.ask-forma-composer {
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--border-strong);
+  background: var(--background);
+}
+
+.ask-forma-composer > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ask-forma-composer > div {
+  padding: 10px 10px 8px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: end;
+  gap: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.ask-forma-composer > div:focus-within {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-soft);
+}
+
+.ask-forma-composer textarea {
+  width: 100%;
+  min-height: 54px;
+  max-height: 130px;
+  padding: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ask-forma-composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.ask-forma-composer > div button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--signal);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--signal);
+  color: #fff;
+  cursor: pointer;
+}
+
+.ask-forma-composer > div button:disabled {
+  border-color: var(--border);
+  background: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.ask-forma-composer > small {
+  margin: 7px 2px 0;
+  display: block;
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+}
+
+@media (min-width: 1200px) {
+  .results-page {
+    transition: width 220ms ease, margin 220ms ease;
+  }
+
+  .results-page.has-ask-drawer {
+    width: min(calc(100% - 532px), 1220px);
+    margin-left: 24px;
+    margin-right: 508px;
+  }
 }
 
 .drawer-header {
@@ -2126,6 +2579,15 @@
     flex-wrap: wrap;
   }
 
+  .results-actions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .ask-forma-disabled-copy {
+    text-align: left;
+  }
+
   .ranking-panel > .result-grid {
     display: none;
   }
@@ -2211,6 +2673,30 @@
     width: 100vw;
     padding-inline: 18px;
     border-left: 0;
+  }
+
+  .ask-forma-drawer {
+    width: 100vw;
+    height: 100dvh;
+    inset: 0;
+    border-left: 0;
+  }
+
+  .ask-forma-header {
+    min-height: 124px;
+    padding: 20px 18px;
+  }
+
+  .ask-forma-header h2 {
+    font-size: 27px;
+  }
+
+  .ask-forma-conversation {
+    padding: 20px 18px 24px;
+  }
+
+  .ask-forma-composer {
+    padding: 13px 14px max(14px, env(safe-area-inset-bottom));
   }
 
   .drawer-header h2 {
