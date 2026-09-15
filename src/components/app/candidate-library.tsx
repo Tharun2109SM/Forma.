@@ -241,8 +241,8 @@ export function CandidateLibrary({
                 <th>Analysis / role</th>
                 <th>Rank</th>
                 <th>Score</th>
-                <th>Matched signals</th>
-                <th>Missing</th>
+                <th>Evidenced signals</th>
+                <th><span title="No supporting resume evidence was found; this is not a claim that the candidate lacks the skill.">Not evidenced</span></th>
               </tr>
             </thead>
             <tbody>

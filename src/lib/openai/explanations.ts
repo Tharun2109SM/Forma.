@@ -31,7 +31,7 @@ export async function explainTopCandidates({
   const response = await getOpenAIClient().responses.create({
     model,
     instructions:
-      "Explain the supplied deterministic ranking. Do not invent evidence, recalculate scores, or change rank order.",
+      "Explain the supplied deterministic ranking. Do not invent evidence, recalculate scores, or change rank order. Missing skills mean not evidenced in the uploaded resume, not that the candidate lacks or does not know a skill. Distinguish documented evidence from absence of evidence and inference.",
     input: JSON.stringify({ jobTitle, requiredSkills, candidates: topThree }),
   });
 

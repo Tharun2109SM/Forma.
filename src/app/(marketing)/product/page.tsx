@@ -55,7 +55,7 @@ export default function ProductPage() {
           <div className="marketing-product-outputs">
             <MonoEyebrow>OUTPUT / RECRUITER WORKSPACE</MonoEyebrow>
             <div><span>01</span><strong>Ranked shortlist</strong><small>fixed-weight score</small></div>
-            <div><span>02</span><strong>Candidate detail</strong><small>matched + missing skills</small></div>
+            <div><span>02</span><strong>Candidate detail</strong><small>evidenced + not evidenced</small></div>
             <div><span>03</span><strong>Evidence</strong><small>source text and explanation</small></div>
             <div><span>04</span><strong>Ask Forma.</strong><small>analysis-scoped Q&amp;A</small></div>
           </div>
@@ -73,7 +73,7 @@ export default function ProductPage() {
       </section>
 
       <section className="marketing-detail-section marketing-evidence-section" aria-labelledby="evidence-title">
-        <MarketingSectionHeading index="03" label="EVIDENCE" title={<span id="evidence-title">Stay close to the source.</span>} description="Candidate detail keeps score composition, matched skills, missing requirements, and excerpts together." />
+        <MarketingSectionHeading index="03" label="EVIDENCE" title={<span id="evidence-title">Stay close to the source.</span>} description="Candidate detail keeps score composition, evidenced requirements, requirements not evidenced in the resume, and source excerpts together." />
         <div className="marketing-evidence-diagram">
           <div><span>RANK / 01</span><strong>Final score</strong><p>Semantic + explicit + coverage</p></div>
           <SignalLine active />

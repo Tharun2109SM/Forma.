@@ -116,7 +116,7 @@ export function RankingSection() {
       </div>
       <div className="formula-board" data-formula-board>
         <div className="formula-weights">
-          {[["SEMANTIC", "50", "Meaning"], ["EXPLICIT", "30", "Verified skills"], ["COVERAGE", "20", "Required evidence"]].map(([label, weight, copy]) => (
+          {[["SEMANTIC", "50", "Meaning"], ["EXPLICIT", "30", "Resume evidence"], ["COVERAGE", "20", "Required evidence"]].map(([label, weight, copy]) => (
             <div data-formula-part key={label}><span>{label}</span><strong>{weight}<small>%</small></strong><p>{copy}</p></div>
           ))}
         </div>
@@ -132,7 +132,7 @@ export function ProductPreview() {
       <div className="product-story-copy">
         <CoordinateMarker>Y:05 / PRODUCT</CoordinateMarker>
         <h2>The shortlist<br />shows its work.</h2>
-        <p>Activate a record to inspect matched signals, missing requirements, score rails, and source evidence.</p>
+        <p>Activate a record to inspect evidenced signals, requirements not evidenced in the resume, score rails, and source evidence.</p>
       </div>
       <div className="product-console" data-scroll-reveal>
         <header><span>ANALYSIS / SAMPLE-001</span><span>COMPLETED · 03 CANDIDATES</span></header>

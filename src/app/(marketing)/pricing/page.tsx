@@ -36,7 +36,7 @@ export default function PricingPage() {
         <div className="marketing-feature-rows">
           <article><span>01 / INPUT</span><div><h3>Multi-format document intake</h3><p>Compare a job description with candidate PDF, DOCX, XML, and TXT files.</p></div></article>
           <article><span>02 / RANK</span><div><h3>Explainable shortlist</h3><p>See fixed-weight semantic, explicit, and coverage scores together.</p></div></article>
-          <article><span>03 / DETAIL</span><div><h3>Candidate evidence</h3><p>Review matched skills, missing requirements, and source excerpts.</p></div></article>
+          <article><span>03 / DETAIL</span><div><h3>Candidate evidence</h3><p>Review evidenced requirements, requirements not evidenced in the resume, and source excerpts.</p></div></article>
           <article><span>04 / ASK</span><div><h3>Analysis-wide questions</h3><p>Ask Forma. about the role and its candidates with source references.</p></div></article>
         </div>
       </section>

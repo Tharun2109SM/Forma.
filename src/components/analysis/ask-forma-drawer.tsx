@@ -10,25 +10,35 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import "./ask-forma-workspace.css";
 
 const STARTER_PROMPTS = [
   "Why is the top candidate ranked first?",
   "Who has the strongest backend experience?",
-  "Which candidates match React but are missing PostgreSQL?",
+  "Which candidates evidence React but do not evidence PostgreSQL?",
   "Compare the top three candidates.",
 ] as const;
 
-type ChatSource = {
+export type ChatSource = {
   sourceId: string;
+  candidateId: string | null;
+  documentId: string;
+  chunkIndex: number;
   candidateName: string | null;
   filename: string;
   documentType: "JOB_DESCRIPTION" | "RESUME";
   pageNumber: number | null;
   section: string | null;
   excerpt: string;
-  similarity: number;
+  similarity: number | null;
 };
 
 type ChatMessage =
@@ -38,9 +48,11 @@ type ChatMessage =
 type ErrorPayload = { error?: string; code?: string };
 
 function userFacingError(status: number, payload: ErrorPayload) {
-  if (status === 401) return "Your session has expired. Sign in again to ask Forma.";
+  if (status === 401)
+    return "Your session has expired. Sign in again to ask Forma.";
   if (status === 404) return "This analysis is no longer available.";
-  if (status === 429) return "Forma. is receiving too many questions. Wait a moment and try again.";
+  if (status === 429)
+    return "Forma. is receiving too many questions. Wait a moment and try again.";
   if (payload.code === "ANALYSIS_NOT_READY") {
     return "Forma. is still indexing these documents.";
   }
@@ -54,11 +66,15 @@ function userFacingError(status: number, payload: ErrorPayload) {
 }
 
 function renderInline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
-    part.startsWith("**") && part.endsWith("**")
-      ? <strong key={`${index}-${part}`}>{part.slice(2, -2)}</strong>
-      : part,
-  );
+  return text
+    .split(/(\*\*[^*]+\*\*)/g)
+    .map((part, index) =>
+      part.startsWith("**") && part.endsWith("**") ? (
+        <strong key={`${index}-${part}`}>{part.slice(2, -2)}</strong>
+      ) : (
+        part
+      ),
+    );
 }
 
 function AssistantContent({ content }: { content: string }) {
@@ -68,7 +84,8 @@ function AssistantContent({ content }: { content: string }) {
     <div className="ask-forma-response-copy">
       {blocks.map((block, index) => {
         const lines = block.split("\n").filter(Boolean);
-        const isBulletList = lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line));
+        const isBulletList =
+          lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line));
         const isNumberedList =
           lines.length > 0 && lines.every((line) => /^\d+[.)]\s+/.test(line));
 
@@ -85,29 +102,46 @@ function AssistantContent({ content }: { content: string }) {
           return (
             <ol key={`${index}-${block.slice(0, 20)}`}>
               {lines.map((line) => (
-                <li key={line}>{renderInline(line.replace(/^\d+[.)]\s+/, ""))}</li>
+                <li key={line}>
+                  {renderInline(line.replace(/^\d+[.)]\s+/, ""))}
+                </li>
               ))}
             </ol>
           );
         }
-        return <p key={`${index}-${block.slice(0, 20)}`}>{renderInline(block)}</p>;
+        return (
+          <p key={`${index}-${block.slice(0, 20)}`}>{renderInline(block)}</p>
+        );
       })}
     </div>
   );
 }
 
-function SourceCards({ sources }: { sources: ChatSource[] }) {
+function SourceCards({
+  sources,
+  onSourceSelect,
+}: {
+  sources: ChatSource[];
+  onSourceSelect?: (source: ChatSource, trigger: HTMLButtonElement) => void;
+}) {
   if (sources.length === 0) return null;
 
   return (
     <div className="ask-forma-sources">
-      <span>{sources.length} {sources.length === 1 ? "SOURCE" : "SOURCES"}</span>
+      <span>
+        {sources.length} {sources.length === 1 ? "SOURCE" : "SOURCES"}
+      </span>
       {sources.map((source) => (
         <details key={source.sourceId}>
           <summary>
             <span className="ask-source-id">{source.sourceId}</span>
             <span>
-              <strong>{source.candidateName ?? "Job description"}</strong>
+              <strong>
+                {source.candidateName ??
+                  (source.documentType === "RESUME"
+                    ? "Candidate resume"
+                    : "Job description")}
+              </strong>
               <small>
                 {source.filename}
                 {source.pageNumber ? ` · Page ${source.pageNumber}` : ""}
@@ -117,13 +151,28 @@ function SourceCards({ sources }: { sources: ChatSource[] }) {
           </summary>
           <div className="ask-source-body">
             <div>
-              <span>{source.documentType === "RESUME" ? "RESUME" : "JOB DESCRIPTION"}</span>
+              <span>
+                {source.documentType === "RESUME"
+                  ? "RESUME"
+                  : "JOB DESCRIPTION"}
+              </span>
               {source.section ? <span>{source.section}</span> : null}
-              {Number.isFinite(source.similarity) ? (
+              {typeof source.similarity === "number" &&
+              Number.isFinite(source.similarity) ? (
                 <span>{Math.round(source.similarity * 100)}% relevance</span>
               ) : null}
             </div>
-            <p><FileText aria-hidden="true" size={13} /> “{source.excerpt}”</p>
+            <p>
+              <FileText aria-hidden="true" size={13} /> “{source.excerpt}”
+            </p>
+            {source.candidateId && onSourceSelect && (
+              <button
+                type="button"
+                onClick={(event) => onSourceSelect(source, event.currentTarget)}
+              >
+                Inspect candidate evidence & source
+              </button>
+            )}
           </div>
         </details>
       ))}
@@ -131,7 +180,7 @@ function SourceCards({ sources }: { sources: ChatSource[] }) {
   );
 }
 
-function useAskFormaSession(analysisId: string) {
+function useAskFormaSession(analysisId: string, candidateIds?: string[]) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -160,10 +209,15 @@ function useAskFormaSession(analysisId: string) {
       const response = await fetch(`/api/analysis/${analysisId}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({
+          question: trimmed,
+          ...(candidateIds ? { candidateIds } : {}),
+        }),
         signal: controller.signal,
       });
-      const payload = (await response.json().catch(() => ({}))) as ErrorPayload & {
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as ErrorPayload & {
         answer?: string;
         sources?: ChatSource[];
       };
@@ -181,7 +235,11 @@ function useAskFormaSession(analysisId: string) {
       ]);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setError(cause instanceof Error ? cause.message : "Forma. could not answer right now.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Forma. could not answer right now.",
+      );
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setSubmitting(false);
@@ -198,50 +256,87 @@ function AskFormaContent({
   variant,
   visible,
   onClose,
+  candidateNames,
+  onSourceSelect,
 }: {
   session: AskFormaSession;
   variant: "drawer" | "embedded";
   visible: boolean;
   onClose?: () => void;
+  candidateNames?: string[];
+  onSourceSelect?: (source: ChatSource, trigger: HTMLButtonElement) => void;
 }) {
-  const { messages, draft, setDraft, submitting, error, submitQuestion } = session;
+  const { messages, draft, setDraft, submitting, error, submitQuestion } =
+    session;
   const endRef = useRef<HTMLDivElement>(null);
   const questionId = useId();
 
   useEffect(() => {
     if (!visible || messages.length === 0) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    endRef.current?.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "end" });
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    endRef.current?.scrollIntoView({
+      behavior: reducedMotion ? "instant" : "smooth",
+      block: "end",
+    });
   }, [messages, visible, submitting]);
 
   return (
-    <section className={`ask-forma-workspace ask-forma-workspace-${variant}`} aria-label="Ask Forma analysis intelligence">
+    <section
+      className={`ask-forma-workspace ask-forma-workspace-${variant}`}
+      aria-label="Ask Forma analysis intelligence"
+    >
       <header className="ask-forma-header">
         <div>
-          <span className="page-kicker">ANALYSIS-WIDE INTELLIGENCE</span>
+          <span className="page-kicker">
+            {candidateNames
+              ? "COMPARISON INTELLIGENCE"
+              : "ANALYSIS-WIDE INTELLIGENCE"}
+          </span>
           <h2>Ask Forma.</h2>
-          <p>Ask questions across this JD and all candidate documents.</p>
+          <p>
+            {candidateNames
+              ? `This JD and ${candidateNames.join(", ")}.`
+              : "Ask questions across this JD and all candidate documents."}
+          </p>
         </div>
         {onClose && (
-          <button aria-label="Close Ask Forma" onClick={onClose} type="button"><X size={18} /></button>
+          <button aria-label="Close Ask Forma" onClick={onClose} type="button">
+            <X size={18} />
+          </button>
         )}
       </header>
 
       <div className="ask-forma-conversation" aria-live="polite">
         {messages.length === 0 ? (
           <section className="ask-forma-empty">
-            <span><MessageSquareText aria-hidden="true" size={18} /></span>
+            <span>
+              <MessageSquareText aria-hidden="true" size={18} />
+            </span>
             <h2>Ask about this shortlist</h2>
-            <p>Answers stay grounded in uploaded evidence and stored deterministic scores.</p>
+            <p>
+              Answers stay grounded in uploaded evidence and stored
+              deterministic scores.
+            </p>
             <div>
-              {STARTER_PROMPTS.map((prompt) => (
+              {(candidateNames
+                ? [
+                    `Why is ${candidateNames[0]} ranked above ${candidateNames[1]}?`,
+                    "Which selected candidate has the strongest backend evidence?",
+                    "Compare their PostgreSQL evidence.",
+                    "Who has the fewest required skills not evidenced in their resume?",
+                  ]
+                : STARTER_PROMPTS
+              ).map((prompt) => (
                 <button
                   disabled={submitting}
                   key={prompt}
                   onClick={() => void submitQuestion(prompt)}
                   type="button"
                 >
-                  {prompt}<ArrowUp aria-hidden="true" size={13} />
+                  {prompt}
+                  <ArrowUp aria-hidden="true" size={13} />
                 </button>
               ))}
             </div>
@@ -249,14 +344,22 @@ function AskFormaContent({
         ) : (
           <ol className="ask-forma-messages">
             {messages.map((message) => (
-              <li className={`ask-message ask-message-${message.role}`} key={message.id}>
+              <li
+                className={`ask-message ask-message-${message.role}`}
+                key={message.id}
+              >
                 <span>{message.role === "recruiter" ? "YOU" : "FORMA."}</span>
                 {message.role === "assistant" ? (
                   <>
                     <AssistantContent content={message.content} />
-                    <SourceCards sources={message.sources} />
+                    <SourceCards
+                      sources={message.sources}
+                      onSourceSelect={onSourceSelect}
+                    />
                   </>
-                ) : <p>{message.content}</p>}
+                ) : (
+                  <p>{message.content}</p>
+                )}
               </li>
             ))}
           </ol>
@@ -267,7 +370,11 @@ function AskFormaContent({
             Retrieving evidence from this analysis…
           </div>
         ) : null}
-        {error ? <p className="ask-forma-error" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="ask-forma-error" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div ref={endRef} />
       </div>
 
@@ -278,7 +385,9 @@ function AskFormaContent({
           void submitQuestion(draft);
         }}
       >
-        <label htmlFor={questionId}>Ask about candidates, skills, evidence, or ranking</label>
+        <label htmlFor={questionId}>
+          Ask about candidates, skills, evidence, or ranking
+        </label>
         <div>
           <textarea
             disabled={submitting}
@@ -300,7 +409,11 @@ function AskFormaContent({
             disabled={submitting || draft.trim().length < 3}
             type="submit"
           >
-            {submitting ? <LoaderCircle className="spin" size={16} /> : <ArrowUp size={16} />}
+            {submitting ? (
+              <LoaderCircle className="spin" size={16} />
+            ) : (
+              <ArrowUp size={16} />
+            )}
           </button>
         </div>
         <small>Enter to send · Shift + Enter for a new line</small>
@@ -309,9 +422,27 @@ function AskFormaContent({
   );
 }
 
-export function AskFormaWorkspace({ analysisId }: { analysisId: string }) {
-  const session = useAskFormaSession(analysisId);
-  return <AskFormaContent session={session} variant="embedded" visible />;
+export function AskFormaWorkspace({
+  analysisId,
+  candidateIds,
+  candidateNames,
+  onSourceSelect,
+}: {
+  analysisId: string;
+  candidateIds?: string[];
+  candidateNames?: string[];
+  onSourceSelect?: (source: ChatSource, trigger: HTMLButtonElement) => void;
+}) {
+  const session = useAskFormaSession(analysisId, candidateIds);
+  return (
+    <AskFormaContent
+      session={session}
+      variant="embedded"
+      visible
+      candidateNames={candidateNames}
+      onSourceSelect={onSourceSelect}
+    />
+  );
 }
 
 export function AskFormaDrawer({
